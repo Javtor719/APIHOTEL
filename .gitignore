@@ -1,0 +1,26 @@
+# --- NODE.JS (API) ---
+node_modules/
+npm-debug.log*
+.env
+
+# --- C# / WPF (Escritorio) ---
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+
+# --- ANDROID (Móvil) ---
+.gradle/
+build/
+captures/
+*.iml
+.externalNativeBuild/
+.cxx/
+local.properties
+
+# --- SISTEMA ---
+.DS_Store
+Thumbs.db
