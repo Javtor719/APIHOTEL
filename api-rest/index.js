@@ -6,7 +6,7 @@ const habitacionRoutes = require ('./routes/habitacionRoutes');
 
 const app = express();
 
-app.use('/reserva',reservationRoutes);
+app.use('/reservation',reservationRoutes);
 app.use('/usuario',usuarioRoutes);
 app.use('/habitacion',habitacionRoutes);
 
