@@ -11,12 +11,12 @@ router.delete('/delete/:id', reservationController.cancelReservation);
 //List reservation (emp,admin)
 router.get('/',reservationController.listReservations);
 // Obtener reserva por ID
-router.get('/:id', getReservation);
+router.get('/:id', reservationController.getReservation);
 
 // Check-in
-router.patch('/reservations/:id/checkin', checkIn);
+router.patch('/reservations/:id/checkin', reservationController.checkIn);
 
 // Check-out
-router.patch('/reservations/:id/checkout', checkOut);
+router.patch('/reservations/:id/checkout', reservationController.checkOut);
 
 module.exports = router;
