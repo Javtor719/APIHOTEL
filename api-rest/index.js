@@ -1,12 +1,12 @@
 const express = require ('express');
 const mongoose = require('mongoose');
-const reservaRoutes = require ('./routes/reservaRoutes');
+const reservationRoutes = require ('./routes/reservationRoutes');
 const usuarioRoutes = require ('./routes/usuarioRoutes');
 const habitacionRoutes = require ('./routes/habitacionRoutes');
 
 const app = express();
 
-app.use('/reserva',reservaRoutes);
+app.use('/reserva',reservationRoutes);
 app.use('/usuario',usuarioRoutes);
 app.use('/habitacion',habitacionRoutes);
 
