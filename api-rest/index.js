@@ -8,7 +8,7 @@ const app = express();
 
 app.use('/reservations',reservationRoutes);
 app.use('/usuario',usuarioRoutes);
-app.use('/habitacion',habitacionRoutes);
+app.use('/rooms',habitacionRoutes);
 
 
 mongoose.connect('mongodb://localhost:27017/HotelPereMaria')
