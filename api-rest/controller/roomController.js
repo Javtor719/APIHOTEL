@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const Room = require('../models/rooms');
-const Reservation = require('../models/Reservations'); 
+const Reservation = require('../models/reservation'); 
 /**
  * Gestión de Habitaciones:
  * - Crear habitación
@@ -11,11 +11,11 @@ const Reservation = require('../models/Reservations');
  * - Obtener habitación por ID
  * @Javtor719
  */
-
+//Crear habitación
 async function addRoom(req, res) {
     try {
         const {
-            numRoom,
+            numFloor,
             roomType,
             description,
             image,
@@ -26,7 +26,7 @@ async function addRoom(req, res) {
         } = req.body;
 
         if (
-            numRoom === undefined ||
+            numFloor===undefined||
             !roomType ||
             pricePerNight === undefined ||
             maxOccupancy === undefined ||
@@ -34,23 +34,31 @@ async function addRoom(req, res) {
         ) {
             return res.status(400).json({ error: 'Faltan datos obligatorios para crear la habitación' });
         }
-
-        const num = Number(numRoom);
+        
+        const numF=Number(numFloor);
         const price = Number(pricePerNight);
         const occ = Number(maxOccupancy);
 
-        if (!Number.isFinite(num) || num < 1) {
-            return res.status(400).json({ error: 'numRoom debe ser un número >= 1' });
+        if (!Number.isFinite(numF) || numF < 1||numF>7) {
+            return res.status(400).json({ error: 'El número de planta debe ser un número entre 1 y 7 ' });
         }
         if (!Number.isFinite(price) || price < 1) {
-            return res.status(400).json({ error: 'pricePerNight debe ser un número >= 1' });
+            return res.status(400).json({ error: 'El precio por noche debe ser un mayor a 0' });
         }
         if (!Number.isFinite(occ) || occ < 1 || occ > 4) {
-            return res.status(400).json({ error: 'maxOccupancy debe estar entre 1 y 4' });
+            return res.status(400).json({ error: 'Debe de haber entre 1 y 4 huespedes' });
         }
-
-        const newRoom = new Room({
-            numRoom: num,
+        const numFloorRoom = numF * 100;
+        const lastRoom= await Room.findOne({numRoom:{$gte:numFloorRoom,$lt:numFloorRoom+100}}).sort({numRoom:-1});
+        let nextRoom=0;
+        if(!lastRoom){
+            nextRoom=numFloorRoom
+        }else{
+            nextRoom=lastRoom.numRoom+1
+        }
+        let newRoom = new Room({
+            numRoom: nextRoom,
+            numFloor:numF,
             roomType,
             description,
             image,
@@ -146,7 +154,6 @@ async function updateRoom(req, res) {
         }
 
         const allowedFields = [
-            'numRoom',
             'roomType',
             'description',
             'image',
@@ -165,7 +172,6 @@ async function updateRoom(req, res) {
             return res.status(400).json({ error: 'No se han enviado campos permitidos para actualizar' });
         }
 
-        if (allowUpdates.numRoom !== undefined) allowUpdates.numRoom = Number(allowUpdates.numRoom);
         if (allowUpdates.pricePerNight !== undefined) allowUpdates.pricePerNight = Number(allowUpdates.pricePerNight);
         if (allowUpdates.maxOccupancy !== undefined) allowUpdates.maxOccupancy = Number(allowUpdates.maxOccupancy);
 

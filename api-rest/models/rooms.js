@@ -2,7 +2,8 @@ const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
 const RoomSchema = new Schema({
-    numRoom:{type: Number, unique: true, required: true,min:1},
+    numRoom:{type: Number, unique: true, required: true,min:100,max:799},
+    numFloor:{type:Number, required:true,min:1,max:7},
     roomType:{type:String,enum: ['single', 'double', 'triple','fourfold'], required: true},
     description:{type: String,trim: true},
     image:[{type: String}],
@@ -12,5 +13,5 @@ const RoomSchema = new Schema({
     availability:{type:String,enum: ['available', 'unavailable','block'], required: true}
 });
 
-const Room = mongoose.model('rooms', RoomSchema);
+const Room = mongoose.model('Room', RoomSchema);
 module.exports = Room;

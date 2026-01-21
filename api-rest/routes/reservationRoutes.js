@@ -14,9 +14,9 @@ router.get('/',reservationController.listReservations);
 router.get('/:id', reservationController.getReservation);
 
 // Check-in
-router.patch('/reservations/:id/checkin', reservationController.checkIn);
+router.patch('/:id/checkin', reservationController.checkIn);
 
 // Check-out
-router.patch('/reservations/:id/checkout', reservationController.checkOut);
+router.patch('/:id/checkout', reservationController.checkOut);
 
 module.exports = router;
