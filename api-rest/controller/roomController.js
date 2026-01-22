@@ -48,15 +48,20 @@ async function addRoom(req, res) {
         if (!Number.isFinite(occ) || occ < 1 || occ > 4) {
             return res.status(400).json({ error: 'Debe de haber entre 1 y 4 huespedes' });
         }
+        
         const numFloorRoom = numF * 100;
         const lastRoom= await Room.findOne({numRoom:{$gte:numFloorRoom,$lt:numFloorRoom+100}}).sort({numRoom:-1});
+
         let nextRoom=0;
         if(!lastRoom){
-            nextRoom=numFloorRoom
+            nextRoom=numFloorRoom+1;
         }else{
             nextRoom=lastRoom.numRoom+1
+            if(nextRoom>=numFloorRoom+100){
+                return res.status(400).json({ error: `No se pueden crear más habitaciones en la planta ${numF}` });
+            }
         }
-        let newRoom = new Room({
+        const newRoom = new Room({
             numRoom: nextRoom,
             numFloor:numF,
             roomType,
