@@ -5,6 +5,14 @@ function parseDate(value) {
     return isNaN(d.getTime()) ? null : d;
   }
 
+  function startOfHotelDay(date) {
+    const d = new Date(date);
+    d.setHours(12, 0, 0, 0); // 12:00 del día actual
+    return d;
+  }
+
+  
+
   async function createReservation(req, res) {
     try {
       const { userId, roomId, checkIn, checkOut } = req.body;
@@ -21,8 +29,10 @@ function parseDate(value) {
       }
 
       const now = new Date();
-      if (inDate < now) {
-        return res.status(400).json({ error: 'La fecha de check-in no puede ser anterior a hoy' });
+      const hotelDayStart = startOfHotelDay(now);
+      
+      if (inDate < hotelDayStart) {
+        return res.status(400).json({ error: 'La fecha de check-in ya no es válida según el día hotelero'});
       }
 
   
