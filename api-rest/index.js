@@ -5,9 +5,9 @@ const usuarioRoutes = require ('./routes/usuarioRoutes');
 const habitacionRoutes = require ('./routes/habitacionRoutes');
 
 const app = express();
-
+app.use(express.json());
 app.use('/reservations',reservationRoutes);
-app.use('/usuario',usuarioRoutes);
+app.use('/users',usuarioRoutes);
 app.use('/rooms',habitacionRoutes);
 
 
