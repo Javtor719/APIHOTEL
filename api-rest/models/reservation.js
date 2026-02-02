@@ -7,7 +7,7 @@ const reservationSchema = new mongoose.Schema({
     checkOut: { type: Date, required: true },
     status: {
       type: String,
-      enum: ['confirmada', 'cancelada', 'checkin', 'checkout'],
+      enum: ['confirmada', 'terminada','cancelada', 'checkin'],
       default: 'confirmada'
     }
   });

@@ -133,7 +133,7 @@ function parseDate(value) {
       });
     }
   
-    reservation.status = 'checkout';
+    reservation.status = 'terminada';
     await reservation.save();
   
     res.json(reservation);
