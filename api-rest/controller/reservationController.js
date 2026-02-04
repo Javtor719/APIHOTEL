@@ -15,62 +15,64 @@ function parseDate(value) {
 
   async function createReservation(req, res) {
     try {
-      const { userId, roomId, checkIn, checkOut } = req.body;
-  
-      if (!userId || !roomId || !checkIn || !checkOut) {
-        return res.status(400).json({ error: 'Faltan datos obligatorios' });
-      }
-  
-      const inDate = parseDate(checkIn);
-      const outDate = parseDate(checkOut);
-  
-      if (!inDate || !outDate) {
-        return res.status(400).json({ error: 'Formato de fecha inválido' });
-      }
+        const { userId, roomIds, checkIn, checkOut } = req.body; // <-- array de ids
 
-      const now = new Date();
-      const hotelDayStart = startOfHotelDay(now);
-      
-      if (inDate < hotelDayStart) {
-        return res.status(400).json({ error: 'La fecha de check-in ya no es válida según el día hotelero'});
-      }
+        if (!userId || !roomIds || !checkIn || !checkOut || roomIds.length === 0) {
+            return res.status(400).json({ error: 'Faltan datos obligatorios' });
+        }
 
-  
-      if (inDate >= outDate) {
-        return res.status(400).json({
-          error: 'La fecha de check-out debe ser posterior al check-in'
+        const inDate = parseDate(checkIn);
+        const outDate = parseDate(checkOut);
+
+        if (!inDate || !outDate) {
+            return res.status(400).json({ error: 'Formato de fecha inválido' });
+        }
+
+        const now = new Date();
+        const hotelDayStart = startOfHotelDay(now);
+
+        if (inDate < hotelDayStart) {
+            return res.status(400).json({ error: 'La fecha de check-in ya no es válida según el día hotelero'});
+        }
+
+        if (inDate >= outDate) {
+            return res.status(400).json({ error: 'La fecha de check-out debe ser posterior al check-in' });
+        }
+
+        // Revisar disponibilidad para cada habitación
+        for (const roomId of roomIds) {
+            const overlap = await Reservation.findOne({
+                roomIds: roomId,
+                status: { $ne: 'cancelada' },
+                checkIn: { $lt: outDate },
+                checkOut: { $gt: inDate }
+            });
+
+            if (overlap) {
+                return res.status(409).json({
+                    error: `La habitación ${roomId} no está disponible en esas fechas`
+                });
+            }
+        }
+
+        const reservation = new Reservation({
+            userId,
+            roomIds,
+            checkIn: inDate,
+            checkOut: outDate
         });
-      }
-        const overlap = await Reservation.findOne({
-        roomId,
-        status: { $ne: 'cancelada' },
-        checkIn: { $lt: outDate },
-        checkOut: { $gt: inDate }
-      });
-  
-      if (overlap) {
-        return res.status(409).json({
-          error: 'La habitación no está disponible en esas fechas'
-        });
-      }
-  
-      const reservation = new Reservation({
-        userId,
-        roomId,
-        checkIn: inDate,
-        checkOut: outDate
-      });
-  
-      await reservation.save();
-      res.status(201).json(reservation);
-  
+
+        await reservation.save();
+        res.status(201).json(reservation);
+
     } catch (err) {
-      res.status(500).json({
-        error: 'Error al crear la reserva',
-        detalle: err.message
-      });
+        res.status(500).json({
+            error: 'Error al crear la reserva',
+            detalle: err.message
+        });
     }
-  }
+}
+
 
   async function listReservations(req, res) {
     const reservations = await Reservation
