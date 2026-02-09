@@ -23,7 +23,6 @@ async function addRoom(req, res) {
             description,
             image,
             pricePerNight,
-            reviews,
             maxOccupancy,
             availability
         } = req.body;
@@ -71,7 +70,6 @@ async function addRoom(req, res) {
             description,
             image,
             pricePerNight: price,
-            reviews,
             maxOccupancy: occ,
             availability
         });
@@ -197,7 +195,6 @@ async function updateRoom(req, res) {
             'description',
             'image',
             'pricePerNight',
-            'reviews',
             'maxOccupancy',
             'availability'
         ];
