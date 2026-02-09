@@ -14,6 +14,7 @@ function startOfHotelDay(date) {
 
 async function createReservation(req, res) {
   try {
+    console.log('BODY RECIBIDO:', req.body);
     const { userId, roomIds, checkIn, checkOut } = req.body;
 
     // 1. Validaciones básicas
@@ -21,8 +22,16 @@ async function createReservation(req, res) {
       return res.status(400).json({ error: 'Debes seleccionar al menos una habitación' });
     }
 
-    const inDate = parseDate(checkIn);
-    const outDate = parseDate(checkOut);
+    const inDateRaw = parseDate(checkIn);
+    const outDateRaw = parseDate(checkOut);
+
+    if (!inDateRaw || !outDateRaw) {
+      return res.status(400).json({ error: 'Fechas inválidas' });
+    }
+
+    const inDate = startOfHotelDay(inDateRaw);
+    const outDate = startOfHotelDay(outDateRaw);
+
     if (!inDate || !outDate || inDate >= outDate) {
       return res.status(400).json({ error: 'Fechas inválidas' });
     }
