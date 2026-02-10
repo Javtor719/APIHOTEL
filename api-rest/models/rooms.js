@@ -8,7 +8,6 @@ const RoomSchema = new Schema({
     description:{type: String,trim: true},
     image:[{type: String}],
     pricePerNight:{type: Number, min:1, required: true},
-    reviews:[{type:String}],
     maxOccupancy:{type: Number, min:1, max:4,required: true},
     availability:{type:String,enum: ['available', 'unavailable','block'], required: true}
 });

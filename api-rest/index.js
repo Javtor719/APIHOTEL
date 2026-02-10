@@ -9,11 +9,15 @@ const  authRouter  = require('./routes/authRouter');
 
 const app = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+//Ver imagenes por url
+app.use('/uploads', express.static('uploads'));
+
 app.use('/reservations',reservationRoutes);
 app.use('/users',usersRoutes);
 app.use('/rooms',habitacionRoutes);
 app.use('/auth',authRouter)
-//app.use('/reviews',reviewRoutes)
+app.use('/reviews',reviewRoutes)
 
 
 mongoose.connect('mongodb://localhost:27017/HotelPereMaria')
