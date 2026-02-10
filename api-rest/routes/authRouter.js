@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const { login } = require("../controller/authController");
 
-router.get('/', (req, res) => res.json({ msg: "Ruta de usuario lista" }));
 
+router.post("/login", login);
 module.exports = router;

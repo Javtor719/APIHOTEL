@@ -1,9 +1,11 @@
 const express = require ('express');
 const mongoose = require('mongoose');
 const reservationRoutes = require ('./routes/reservationRoutes');
-const usuarioRoutes = require ('./routes/usuarioRoutes');
+const usersRoutes = require ('./routes/userRoutes');
 const habitacionRoutes = require ('./routes/habitacionRoutes');
 const reviewRoutes = require ('./routes/reviewRoutes');
+const  authRouter  = require('./routes/authRouter');
+
 
 const app = express();
 app.use(express.json());
@@ -12,9 +14,10 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static('uploads'));
 
 app.use('/reservations',reservationRoutes);
-app.use('/users',usuarioRoutes);
+app.use('/users',usersRoutes);
 app.use('/rooms',habitacionRoutes);
-app.use('/reviews',reviewRoutes);
+app.use('/auth',authRouter)
+app.use('/reviews',reviewRoutes)
 
 
 mongoose.connect('mongodb://localhost:27017/HotelPereMaria')
