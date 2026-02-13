@@ -13,8 +13,10 @@ const JWT_SECRET = new TextEncoder().encode('prueba');
 async function verifyToken(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader)
+    if (!authHeader) {
+      console.log(authHeader);
       return res.status(401).json({ error: "Token requerido" });
+    }
 
     const [scheme, token] = authHeader.split(" ");
     if (scheme !== "Bearer" || !token)

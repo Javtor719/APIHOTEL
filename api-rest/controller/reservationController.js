@@ -148,13 +148,38 @@ async function createReservation(req, res) {
     res.json(reservation);
   }
 
+  async function deleteReservation(req, res) {
+    try {
+      const { id } = req.params;
+  
+      if (!id || !mongoose.isValidObjectId(id)) {
+        return res.status(400).json({ error: 'ID inválido' });
+      }
+  
+      const reservation = await Reservation.findById(id);
+  
+      if (!reservation) {
+        return res.status(404).json({ error: 'Reserva no encontrada' });
+      }
+  
+      await Reservation.findByIdAndDelete(id);
+  
+      return res.status(200).json({ message: 'Reserva eliminada correctamente' });
+    } catch (err) {
+      console.error('Error al eliminar reserva:', err);
+      return res.status(500).json({ error: 'Error interno del servidor' });
+    }
+  }
+  
+
   module.exports = {
     createReservation,
     listReservations,
     getReservation,
     cancelReservation,
     checkIn,
-    checkOut
+    checkOut,
+    deleteReservation
   };
   
   

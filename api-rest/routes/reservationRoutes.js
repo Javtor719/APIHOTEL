@@ -6,7 +6,10 @@ const reservationController = require('../controller/reservationController');
 router.post('/add', reservationController.createReservation);
 
 //Delete reservation (emp,admin)
-router.delete('/delete/:id', reservationController.cancelReservation);
+router.delete('/delete/:id', reservationController.deleteReservation);
+
+//Cancelar reserva
+router.patch ('/cancel/:id', reservationController.cancelReservation);
 
 //List reservation (emp,admin)
 router.get('/',reservationController.listReservations);
