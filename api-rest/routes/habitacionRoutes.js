@@ -11,6 +11,6 @@ router.patch('/modify/:id',roomController.updateRoom );
 router.delete('/delete/:id',roomController.deleteRoom );
 router.get('/:id/reservations', roomController.getRoomReservations);
 router.get('/nextRoom/:floor',roomController.nextRoom)
-router.post('/:id/images', roomController.uploadMany, roomController.uploadRoomImages);
-router.delete('/:id/images', roomController.deleteRoomImage);
+router.post('/add/:id/images', roomController.uploadMany, roomController.uploadRoomImages);
+router.delete('/delete/:id/images', roomController.deleteRoomImage);
 module.exports = router;

@@ -77,6 +77,7 @@ async function addRoom(req, res) {
         const saved = await newRoom.save();
         return res.status(201).json({
             message: 'Habitación creada correctamente',
+            id: saved._id,
             numRoom: saved.numRoom,
             numFloor: saved.numFloor
         });
@@ -141,9 +142,19 @@ async function deleteRoom(req, res) {
         });
         }
 
+        const room = await Room.findById(id).select("image");
+        if (!room) return res.status(404).json({ error: 'Habitación no encontrada' });
+
+        const images = room.image || [];
+        for (const img of images) {
+            const diskPath = path.join(__dirname, "..", img); 
+            fs.unlink(diskPath, () => {});
+        }
+
+
         const deleted = await Room.findByIdAndDelete(id);
         if (!deleted) return res.status(404).json({ error: 'Habitación no encontrada' });
-
+        
         return res.status(200).json({ message: 'Habitación eliminada', deleted });
     } catch (err) {
         return res.status(500).json({ error: 'Error al eliminar habitación', detalle: err.message });
