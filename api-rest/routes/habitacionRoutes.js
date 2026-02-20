@@ -5,6 +5,7 @@ const roomController =  require('../controller/roomController');
 
 
 router.get('/', roomController.getAllRooms);
+router.get("/available", roomController.getAvailableRooms);
 router.get('/:id', roomController.getRoomById);
 router.post('/add', roomController.addRoom );
 router.patch('/modify/:id',roomController.updateRoom );

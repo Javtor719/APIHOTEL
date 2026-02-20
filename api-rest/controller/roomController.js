@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Room = require('../models/rooms');
-const Reservation = require('../models/reservation'); 
+const Reservation = require('../models/reservation');
+const { parseDate, startOfHotelDay } = require("../controller/reservationController");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
@@ -8,6 +9,7 @@ const fs = require("fs");
  * Gestión de Habitaciones:
  * - Crear habitación
  * - Eliminar habitación
+ * - Mostrar habitaciones disponibles para un rango de fechas
  * - Listar reservas de una habitación por ID
  * - Modificar habitación
  * - Listar todas las habitaciones con filtros
@@ -161,6 +163,54 @@ async function deleteRoom(req, res) {
     }
 }
 
+//mostrar habitaciones disponibles para un rango de fechas
+async function getAvailableRooms(req, res) {
+    try {
+        const { checkIn, checkOut } = req.query;
+
+    if (!checkIn || !checkOut) {
+        return res.status(400).json({ error: "Faltan checkIn y/o checkOut" });
+    }
+
+    const inRaw = parseDate(checkIn);
+    const outRaw = parseDate(checkOut);
+
+    if (!inRaw || !outRaw) {
+        return res.status(400).json({ error: "Fechas inválidas" });
+    }
+
+    const inDate = startOfHotelDay(inRaw);
+    const outDate = startOfHotelDay(outRaw);
+
+    if (inDate >= outDate) {
+        return res.status(400).json({ error: "checkIn debe ser menor que checkOut" });
+    }
+
+    const overlapping = await Reservation.find({
+        status: { $ne: "cancelada" },
+        checkIn: { $lt: outDate },
+        checkOut: { $gt: inDate },
+    }).select("roomIds");
+
+    const occupiedIds = new Set();
+    for (const r of overlapping) {
+        for (const rid of (r.roomIds || [])) {
+            occupiedIds.add(String(rid));
+        }
+    }
+
+    const rooms = await Room.find({ availability: "available" }).sort({ numRoom: 1 });
+
+    const availableRooms = rooms.filter((room) => !occupiedIds.has(String(room._id)));
+
+    return res.status(200).json(availableRooms);
+    } catch (err) {
+        console.error("getAvailableRooms error:", err);
+        return res.status(500).json({ error: "Error interno del servidor" });
+    }
+}
+
+
 //Listar reservas de una habitación por ID
 async function getRoomReservations(req, res) {
     try {
@@ -266,6 +316,8 @@ async function getAllRooms(req, res) {
     }
 }
 
+
+
 // Obtener una habitación por id
 async function getRoomById(req, res) {
     try {
@@ -361,5 +413,6 @@ module.exports = {
     nextRoom,
     uploadMany,
     uploadRoomImages,
-    deleteRoomImage
+    deleteRoomImage,
+    getAvailableRooms
 };

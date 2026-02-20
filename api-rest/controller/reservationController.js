@@ -179,7 +179,9 @@ async function createReservation(req, res) {
     cancelReservation,
     checkIn,
     checkOut,
-    deleteReservation
+    deleteReservation,
+    parseDate,
+    startOfHotelDay
   };
   
   
