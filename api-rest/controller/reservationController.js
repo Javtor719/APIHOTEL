@@ -1,5 +1,6 @@
 const Reservation = require('../models/reservation');
 const mongoose = require('mongoose');
+const Room = require('../models/rooms'); 
 
 function parseDate(value) {
     const d = new Date(value);
@@ -14,10 +15,8 @@ function startOfHotelDay(date) {
 
 async function createReservation(req, res) {
   try {
-    console.log('BODY RECIBIDO:', req.body);
-    const { userId, roomIds, checkIn, checkOut } = req.body;
-
-    // 1. Validaciones básicas
+    const { userId, roomIds, checkIn, checkOut, numGuests } = req.body;
+    //Validaciones básicas
     if (!userId || !roomIds || !Array.isArray(roomIds) || roomIds.length === 0) {
       return res.status(400).json({ error: 'Debes seleccionar al menos una habitación' });
     }
@@ -36,7 +35,7 @@ async function createReservation(req, res) {
       return res.status(400).json({ error: 'Fechas inválidas' });
     }
 
-    // 2. Buscamos colisiones para TODAS las habitaciones a la vez
+    //Buscamos colisiones
     const overlap = await Reservation.findOne({
       status: { $ne: 'cancelada' },
       roomIds: { $in: roomIds }, 
@@ -53,12 +52,30 @@ async function createReservation(req, res) {
       });
     }
 
-    // 3. Crear la reserva
+    //---Cálculo del Precio---
+    // Obtenemos los documentos de las habitaciones para traer sus precios
+    const roomsFound = await Room.find({ _id: { $in: roomIds } });
+    
+    if (roomsFound.length !== roomIds.length) {
+      return res.status(404).json({ error: 'Una o más habitaciones no existen.' });
+    }
+
+    // Calcular número de noches
+    const diffInMs = outDate.getTime() - inDate.getTime();
+    const nights = Math.ceil(diffInMs / (1000 * 60 * 60 * 24));
+
+    // Sumar el precio por noche de todas las habitaciones seleccionadas
+    const pricePerNightTotal = roomsFound.reduce((total, room) => total + (room.pricePerNight || 0), 0);
+    const finalPrice = pricePerNightTotal * nights;
+
+    // 3. Crear la reserva (añadiendo totalPrice)
     const reservation = new Reservation({
       userId,
       roomIds, 
       checkIn: inDate,
-      checkOut: outDate
+      checkOut: outDate,
+      totalPrice: finalPrice,
+      numGuests: numGuests 
     });
 
     await reservation.save();
@@ -102,63 +119,76 @@ async function createReservation(req, res) {
     }
 }
     
-  async function cancelReservation(req, res) {
+ async function cancelReservation(req, res) {
     const { id } = req.params;
-  
-    const reservation = await Reservation.findById(id);
-    if (!reservation) {
-      return res.status(404).json({ error: 'Reserva no encontrada' });
-    }
-  
-    if (reservation.status === 'cancelada') {
-      return res.status(400).json({ error: 'La reserva ya está cancelada' });
-    }
-  
-    reservation.status = 'cancelada';
-    await reservation.save();
-  
-    res.json(reservation);
-  }
-  
-  async function checkIn(req, res) {
-    const { id } = req.params;
-  
-    const reservation = await Reservation.findById(id);
-    if (!reservation) {
-      return res.status(404).json({ error: 'Reserva no encontrada' });
-    }
-  
-    if (reservation.status !== 'confirmada') {
-      return res.status(400).json({
-        error: 'Solo se puede hacer check-in a reservas confirmadas'
-      });
-    }
-  
-    reservation.status = 'checkin';
-    await reservation.save();
-  
-    res.json(reservation);
-  }
 
-  async function checkOut(req, res) {
-    const { id } = req.params;
-  
+    // Buscamos la reserva primero para validar su estado actual
     const reservation = await Reservation.findById(id);
     if (!reservation) {
-      return res.status(404).json({ error: 'Reserva no encontrada' });
+        return res.status(404).json({ error: 'Reserva no encontrada' });
     }
-  
+
+    if (reservation.status === 'cancelada') {
+        return res.status(400).json({ error: 'La reserva ya está cancelada' });
+    }
+
+    // Usamos findByIdAndUpdate para evitar que la falta de numGuests en registros viejos bloquee el guardado
+    const updatedReservation = await Reservation.findByIdAndUpdate(
+        id,
+        { status: 'cancelada' },
+        { new: true, runValidators: false } 
+    );
+
+    res.json(updatedReservation);
+}
+
+async function checkIn(req, res) {
+    const { id } = req.params;
+
+    const reservation = await Reservation.findById(id);
+    if (!reservation) {
+        return res.status(404).json({ error: 'Reserva no encontrada' });
+    }
+
+    if (reservation.status !== 'confirmada') {
+        return res.status(400).json({
+            error: 'Solo se puede hacer check-in a reservas confirmadas'
+        });
+    }
+
+    // Actualización directa para saltar validaciones de campos obligatorios faltantes
+    const updatedReservation = await Reservation.findByIdAndUpdate(
+        id,
+        { status: 'checkin' },
+        { new: true, runValidators: false }
+    );
+
+    res.json(updatedReservation);
+}
+
+async function checkOut(req, res) {
+    const { id } = req.params;
+
+    const reservation = await Reservation.findById(id);
+    if (!reservation) {
+        return res.status(404).json({ error: 'Reserva no encontrada' });
+    }
+
     if (reservation.status !== 'checkin') {
-      return res.status(400).json({
-        error: 'Solo se puede hacer check-out a una reserva en check-in'
-      });
+        return res.status(400).json({
+            error: 'Solo se puede hacer check-out a una reserva en check-in'
+        });
     }
-  
-    reservation.status = 'terminada';
-    await reservation.save();
-  
-    res.json(reservation);
-  }
+
+    // Actualización directa
+    const updatedReservation = await Reservation.findByIdAndUpdate(
+        id,
+        { status: 'terminada' },
+        { new: true, runValidators: false }
+    );
+
+    res.json(updatedReservation);
+}
 
   async function deleteReservation(req, res) {
     try {

@@ -166,50 +166,80 @@ async function deleteRoom(req, res) {
 //mostrar habitaciones disponibles para un rango de fechas
 async function getAvailableRooms(req, res) {
     try {
-        const { checkIn, checkOut } = req.query;
+        const { checkIn, checkOut, guests } = req.query;
 
-    if (!checkIn || !checkOut) {
-        return res.status(400).json({ error: "Faltan checkIn y/o checkOut" });
-    }
-
-    const inRaw = parseDate(checkIn);
-    const outRaw = parseDate(checkOut);
-
-    if (!inRaw || !outRaw) {
-        return res.status(400).json({ error: "Fechas inválidas" });
-    }
-
-    const inDate = startOfHotelDay(inRaw);
-    const outDate = startOfHotelDay(outRaw);
-
-    if (inDate >= outDate) {
-        return res.status(400).json({ error: "checkIn debe ser menor que checkOut" });
-    }
-
-    const overlapping = await Reservation.find({
-        status: { $ne: "cancelada" },
-        checkIn: { $lt: outDate },
-        checkOut: { $gt: inDate },
-    }).select("roomIds");
-
-    const occupiedIds = new Set();
-    for (const r of overlapping) {
-        for (const rid of (r.roomIds || [])) {
-            occupiedIds.add(String(rid));
+        if (!checkIn || !checkOut || !guests) {
+            return res.status(400).json({ error: "Faltan parámetros: checkIn, checkOut y guests son obligatorios" });
         }
-    }
 
-    const rooms = await Room.find({ availability: "available" }).sort({ numRoom: 1 });
+        const numGuests = Number(guests);
+        const inRaw = parseDate(checkIn);
+        const outRaw = parseDate(checkOut);
 
-    const availableRooms = rooms.filter((room) => !occupiedIds.has(String(room._id)));
+        if (!inRaw || !outRaw || isNaN(numGuests)) {
+            return res.status(400).json({ error: "Datos inválidos en la petición" });
+        }
 
-    return res.status(200).json(availableRooms);
+        const inDate = startOfHotelDay(inRaw);
+        const outDate = startOfHotelDay(outRaw);
+
+        if (inDate >= outDate) {
+            return res.status(400).json({ error: "La fecha de entrada debe ser anterior a la de salida" });
+        }
+
+        //Buscamos qué habitaciones están ocupadas en esas fechas
+        const overlapping = await Reservation.find({
+            status: { $ne: "cancelada" },
+            checkIn: { $lt: outDate },
+            checkOut: { $gt: inDate },
+        }).select("roomIds");
+
+        const occupiedIds = new Set();
+        overlapping.forEach(resv => {
+            resv.roomIds.forEach(id => occupiedIds.add(String(id)));
+        });
+
+        //Buscamos TODAS las habitaciones disponibles en el sistema
+        const allRooms = await Room.find({ availability: "available" }).sort({ numRoom: 1 });
+
+        //Filtramos las que no están ocupadas
+        const availableRooms = allRooms.filter(room => !occupiedIds.has(String(room._id)));
+
+        //---LÓGICA DE CAPACIDAD---
+
+        //Habitaciones que cumplen con el cupo solicitado
+        const suitableRooms = availableRooms.filter(room => room.maxOccupancy >= numGuests);
+
+        //Determinar la respuesta para la App
+        if (availableRooms.length === 0) {
+            return res.status(200).json({
+                code: "NO_ROOMS",
+                message: "No hay habitaciones disponibles para estas fechas.",
+                rooms: []
+            });
+        }
+
+        if (suitableRooms.length === 0) {
+            // Hay habitaciones, pero ninguna es suficientemente grande
+            return res.status(200).json({
+                code: "CAPACITY_EXCEEDED",
+                message: "El número de personas supera la capacidad de nuestras habitaciones disponibles. Por favor, realiza varias reservas o contacta con el hotel.",
+                rooms: availableRooms // Enviamos las disponibles por si quieren verlas
+            });
+        }
+
+        // Caso de éxito: Hay habitaciones que caben todos
+        return res.status(200).json({
+            code: "SUCCESS",
+            message: "Habitaciones encontradas",
+            rooms: suitableRooms
+        });
+
     } catch (err) {
         console.error("getAvailableRooms error:", err);
         return res.status(500).json({ error: "Error interno del servidor" });
     }
 }
-
 
 //Listar reservas de una habitación por ID
 async function getRoomReservations(req, res) {
