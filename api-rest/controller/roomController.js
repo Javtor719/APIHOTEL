@@ -176,9 +176,9 @@ async function getAvailableRooms(req, res) {
         const inRaw = parseDate(checkIn);
         const outRaw = parseDate(checkOut);
 
-        if (!inRaw || !outRaw || isNaN(numGuests)) {
+        if (!inRaw || !outRaw || !Number.isFinite(numGuests) || numGuests < 1) {
             return res.status(400).json({ error: "Datos inválidos en la petición" });
-        }
+        }   
 
         const inDate = startOfHotelDay(inRaw);
         const outDate = startOfHotelDay(outRaw);
@@ -195,44 +195,73 @@ async function getAvailableRooms(req, res) {
         }).select("roomIds");
 
         const occupiedIds = new Set();
-        overlapping.forEach(resv => {
-            resv.roomIds.forEach(id => occupiedIds.add(String(id)));
-        });
+        overlapping.forEach(r => (r.roomIds || []).forEach(id => occupiedIds.add(String(id))));
 
-        //Buscamos TODAS las habitaciones disponibles en el sistema
         const allRooms = await Room.find({ availability: "available" }).sort({ numRoom: 1 });
-
-        //Filtramos las que no están ocupadas
         const availableRooms = allRooms.filter(room => !occupiedIds.has(String(room._id)));
 
-        //---LÓGICA DE CAPACIDAD---
-
-        //Habitaciones que cumplen con el cupo solicitado
-        const suitableRooms = availableRooms.filter(room => room.maxOccupancy >= numGuests);
-
-        //Determinar la respuesta para la App
         if (availableRooms.length === 0) {
             return res.status(200).json({
-                code: "NO_ROOMS",
-                message: "No hay habitaciones disponibles para estas fechas.",
-                rooms: []
+            code: "NO_ROOMS",
+            message: "No hay habitaciones disponibles para esas fechas.",
+            guests: numGuests,
+            roomsNeeded: 0,
+            rooms: []
             });
         }
 
-        if (suitableRooms.length === 0) {
-            // Hay habitaciones, pero ninguna es suficientemente grande
+        const totalCapacity = availableRooms.reduce((acc, r) => acc + (Number(r.maxOccupancy) || 0), 0);
+
+        if (totalCapacity < numGuests) {
             return res.status(200).json({
-                code: "CAPACITY_EXCEEDED",
-                message: "El número de personas supera la capacidad de nuestras habitaciones disponibles. Por favor, realiza varias reservas o contacta con el hotel.",
-                rooms: availableRooms // Enviamos las disponibles por si quieren verlas
-            });
+                code: "CAPACITY_IMPOSSIBLE",
+                message: `Aunque reserves todas las habitaciones disponibles, solo hay capacidad para ${totalCapacity} personas y sois ${numGuests}.`,
+                guests: numGuests,
+                roomsNeeded: null,
+                rooms: availableRooms
+        });
         }
 
-        // Caso de éxito: Hay habitaciones que caben todos
+        //  Mínimo nº habitaciones necesario (greedy: cojo las más grandes primero)
+        const sortedCaps = [...availableRooms]
+            .map(r => Number(r.maxOccupancy) || 0)
+            .sort((a, b) => b - a);
+
+        let sum = 0;
+        let roomsNeeded = 0;
+        for (const cap of sortedCaps) {
+            if (sum >= numGuests) break;
+            if (cap <= 0) continue;
+            sum += cap;
+            roomsNeeded++;
+        }
+        
+        if (sum < numGuests) {
+            return res.status(200).json({
+            code: "CAPACITY_IMPOSSIBLE",
+            message: `No hay combinación de habitaciones disponibles para ${numGuests} personas.`,
+            guests: numGuests,
+            roomsNeeded: null,
+            rooms: availableRooms
+            });
+        }
+    // Mensajes
+        if (roomsNeeded <= 1) {
+                return res.status(200).json({
+                    code: "SUCCESS",
+                    message: "Habitaciones encontradas.",
+                    guests: numGuests,
+                    roomsNeeded,
+                    rooms: availableRooms
+            });
+        }           
+
         return res.status(200).json({
-            code: "SUCCESS",
-            message: "Habitaciones encontradas",
-            rooms: suitableRooms
+            code: "MULTIROOM_REQUIRED",
+            message: `Para ${numGuests} personas necesitas mínimo ${roomsNeeded} habitaciones según las capacidades disponibles.`,
+            guests: numGuests,
+            roomsNeeded,
+            rooms: availableRooms
         });
 
     } catch (err) {
