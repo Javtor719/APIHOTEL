@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const reservationController = require('../controller/reservationController');
+const { verifyToken ,authorizeRoles } = require('../middleware/authMiddleware.js');    
 
 //Add reservation (emp, admin)
 router.post('/add', reservationController.createReservation);
@@ -13,6 +14,10 @@ router.patch ('/cancel/:id', reservationController.cancelReservation);
 
 //List reservation (emp,admin)
 router.get('/',reservationController.listReservations);
+
+// Obtener reservas de un user
+router.get('/my-reservations', verifyToken, authorizeRoles(['Usuario']), reservationController.getUserReservations);
+
 // Obtener reserva por ID
 router.get('/:id', reservationController.getReservation);
 

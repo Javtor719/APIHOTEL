@@ -89,6 +89,18 @@ async function createReservation(req, res) {
   
     res.json(reservation);
   }
+
+  async function getUserReservations(req, res) {
+    try {
+        
+        const userId = req.user.id; 
+        const myReservations = await Reservation.find({ userId: userId })
+                                                .populate('roomIds');
+        res.status(200).json(myReservations);
+    } catch (err) {
+        res.status(500).json({ error: "Error al obtener tus reservas" });
+    }
+}
     
   async function cancelReservation(req, res) {
     const { id } = req.params;
@@ -176,6 +188,7 @@ async function createReservation(req, res) {
     createReservation,
     listReservations,
     getReservation,
+    getUserReservations,
     cancelReservation,
     checkIn,
     checkOut,
