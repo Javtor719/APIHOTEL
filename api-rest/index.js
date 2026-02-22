@@ -1,5 +1,6 @@
 const express = require ('express');
 const mongoose = require('mongoose');
+require('dotenv').config();
 const reservationRoutes = require ('./routes/reservationRoutes');
 const usersRoutes = require ('./routes/userRoutes');
 const habitacionRoutes = require ('./routes/habitacionRoutes');
@@ -19,19 +20,22 @@ app.use('/rooms',habitacionRoutes);
 app.use('/auth',authRouter)
 app.use('/reviews',reviewRoutes)
 
+const PORT = process.env.PORT || 3000;
+const MONGO_URI = process.env.MONGO_URI;
+
 if (!MONGO_URI) {
-  console.error("Falta MONGO_URI en el .env");
+  console.error("Falta MONGO_URI en el entorno");
   process.exit(1);
 }
 
 mongoose
   .connect(MONGO_URI)
-  .then(() => console.log('Conectado a MongoDB'))
+  .then(() => console.log('Conectado a MongoDB Atlas'))
   .catch((err) => {
     console.error('Error MongoDB', err);
     process.exit(1);
   });
 
 app.listen(PORT,'0.0.0.0', () => {
-  console.log(`Servidor escuchando en http://'0.0.0.0':${PORT}`);
+  console.log(`Servidor escuchando en puerto${PORT}`);
 });
