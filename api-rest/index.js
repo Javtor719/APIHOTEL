@@ -19,12 +19,19 @@ app.use('/rooms',habitacionRoutes);
 app.use('/auth',authRouter)
 app.use('/reviews',reviewRoutes)
 
+if (!MONGO_URI) {
+  console.error("Falta MONGO_URI en el .env");
+  process.exit(1);
+}
 
-mongoose.connect('mongodb://localhost:27017/HotelPereMaria')
+mongoose
+  .connect(MONGO_URI)
   .then(() => console.log('Conectado a MongoDB'))
-  .catch(err => console.error('Error MongoDB', err));
+  .catch((err) => {
+    console.error('Error MongoDB', err);
+    process.exit(1);
+  });
 
-const PORT = 3000;
-app.listen(PORT, () => {
-  console.log(`Servidor escuchando en http://localhost:${PORT}`);
+app.listen(PORT,'0.0.0.0', () => {
+  console.log(`Servidor escuchando en http://'0.0.0.0':${PORT}`);
 });
