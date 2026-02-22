@@ -1,6 +1,7 @@
 const Reservation = require('../models/reservation');
 const mongoose = require('mongoose');
 const Room = require('../models/rooms'); 
+const {userDatabaseModel} = require("../models/user");
 
 function parseDate(value) {
     const d = new Date(value);
@@ -66,7 +67,14 @@ async function createReservation(req, res) {
 
     // Sumar el precio por noche de todas las habitaciones seleccionadas
     const pricePerNightTotal = roomsFound.reduce((total, room) => total + (room.pricePerNight || 0), 0);
-    const finalPrice = pricePerNightTotal * nights;
+    let finalPrice = pricePerNightTotal * nights;
+
+    const user = await userDatabaseModel.findById(userId);
+    
+    // 3. SI EL USUARIO ES VIP, APLICAMOS EL 20% DE DESCUENTO
+    if (user && user.vipStatus === true) {
+      finalPrice = finalPrice * 0.80; 
+    }
 
     // 3. Crear la reserva (añadiendo totalPrice)
     const reservation = new Reservation({
