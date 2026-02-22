@@ -43,7 +43,7 @@ async function getReviewsByRoom(req, res) {
 
         const reviews = await Review.find({ roomId })
             .sort({ createdAt: -1 })
-            .populate('userId', 'user_name');
+            .populate('userId', 'firstName lastName email');
 
         return res.status(200).json(reviews);
     } catch (err) {
@@ -53,11 +53,12 @@ async function getReviewsByRoom(req, res) {
 
 async function addReview(req, res) {
     try {
-        const { roomId, userId, reservationId, rating, comment } = req.body;
+        const userId = req.user.id;
+        const { roomId, reservationId, rating, comment } = req.body;
 
     // Validaciones básicas
-        if (!roomId || !userId || !reservationId || rating === undefined) {
-            return res.status(400).json({ error: 'Faltan datos obligatorios (roomId, userId, reservationId, rating)' });
+        if (!roomId || !reservationId || rating === undefined) {
+            return res.status(400).json({ error: 'Faltan datos obligatorios (roomId, reservationId, rating)' });
         }
 
         if (!mongoose.isValidObjectId(roomId) ||
@@ -78,17 +79,18 @@ async function addReview(req, res) {
     // Verificar reserva válida: la reserva debe pertenecer a ese user y room
         const reservation = await Reservation.findOne({
             _id: reservationId,
-            roomId: roomId,
-            userId: userId
+            userId: userId,
+            roomIds: { $in: [roomId] },
         });
 
         if (!reservation) {
+            console.log("RESERVA NO ENCONTRADA");
             return res.status(400).json({ error: 'Reserva no válida para ese usuario y habitación' });
         }
 
     // Validación de solo si ya esta de chaeckout
         const now = new Date();
-        const ended = reservation.status === 'checkout' || (reservation.checkOut && new Date(reservation.checkOut) < now);
+        const ended = reservation.status === 'terminada' || (reservation.checkOut && new Date(reservation.checkOut) < now);
 
         if (!ended) {
             return res.status(400).json({ error: 'No se puede valorar hasta finalizar la estancia (checkout)' });
@@ -178,6 +180,27 @@ async function updateReview(req, res) {
 }
 
 
+async function getReviewByReservation(req, res) {
+    try {
+        const { reservationId } = req.params;
+
+        if (!mongoose.isValidObjectId(reservationId)) {
+            return res.status(400).json({ error: 'reservationId no válido' });
+        }
+
+        const review = await Review.findOne({ reservationId })
+            .populate('userId', 'firstName lastName email')
+            .populate('roomId', 'numRoom roomType');
+
+        if (!review) return res.status(404).json({ error: 'No hay review para esta reserva' });
+
+            return res.status(200).json(review);
+    } catch (err) {
+        return res.status(500).json({ error: 'Error', detalle: err.message });
+    }
+}
+
+
 async function deleteReview(req, res) {
     try {
         const { id } = req.params;
@@ -208,5 +231,6 @@ module.exports = {
     getReviewsByRoom,
     addReview,
     updateReview,
-    deleteReview
+    deleteReview,
+    getReviewByReservation
 };
