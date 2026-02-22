@@ -159,7 +159,7 @@ async function checkIn(req, res) {
     // Actualización directa para saltar validaciones de campos obligatorios faltantes
     const updatedReservation = await Reservation.findByIdAndUpdate(
         id,
-        { status: 'checkin' },
+        { status: 'terminada' },
         { new: true, runValidators: false }
     );
 
@@ -172,12 +172,6 @@ async function checkOut(req, res) {
     const reservation = await Reservation.findById(id);
     if (!reservation) {
         return res.status(404).json({ error: 'Reserva no encontrada' });
-    }
-
-    if (reservation.status !== 'checkin') {
-        return res.status(400).json({
-            error: 'Solo se puede hacer check-out a una reserva en check-in'
-        });
     }
 
     // Actualización directa
