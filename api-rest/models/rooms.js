@@ -9,7 +9,12 @@ const RoomSchema = new Schema({
     image:[{type: String}],
     pricePerNight:{type: Number, min:1, required: true},
     maxOccupancy:{type: Number, min:1, max:4,required: true},
-    availability:{type:String,enum: ['available', 'unavailable','block'], required: true}
+    availability:{type:String,enum: ['available', 'unavailable','block'], required: true},
+    services: {
+    type: [String],
+    enum: ['wifi', 'parking', 'gym', 'towels', 'smoke', 'crib'],
+    default: []
+}
 });
 
 const Room = mongoose.model('Room', RoomSchema);

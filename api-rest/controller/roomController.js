@@ -52,7 +52,15 @@ async function addRoom(req, res) {
         if (!Number.isFinite(occ) || occ < 1 || occ > 4) {
             return res.status(400).json({ error: 'Debe de haber entre 1 y 4 huespedes' });
         }
-        
+        let services = [];
+        if (req.body.services) {
+        try {
+            services = JSON.parse(req.body.services);
+            if (!Array.isArray(services)) services = [];
+        } catch {
+            services = [];
+        }
+}
         const numFloorRoom = numF * 100;
         const lastRoom= await Room.findOne({numRoom:{$gte:numFloorRoom,$lt:numFloorRoom+100}}).sort({numRoom:-1});
 
@@ -73,9 +81,10 @@ async function addRoom(req, res) {
             image,
             pricePerNight: price,
             maxOccupancy: occ,
-            availability
+            availability,
+            services
         });
-
+        
         const saved = await newRoom.save();
         return res.status(201).json({
             message: 'Habitación creada correctamente',
@@ -310,18 +319,34 @@ async function updateRoom(req, res) {
             return res.status(400).json({ error: 'No hay campos para actualizar' });
         }
 
+        let services = [];
+        if (req.body.services) {
+        try {
+            services = JSON.parse(req.body.services);
+            if (!Array.isArray(services)) services = [];
+        } catch {
+            services = [];
+            }
+        }
+
         const allowedFields = [
             'roomType',
             'description',
             'image',
             'pricePerNight',
             'maxOccupancy',
-            'availability'
+            'availability',
+            'services'
         ];
+
 
         const allowUpdates = {};
         for (const key of Object.keys(updates)) {
             if (allowedFields.includes(key)) allowUpdates[key] = updates[key];
+        }
+
+        if (services !== undefined) {
+            allowUpdates.services = services;
         }
 
         if (Object.keys(allowUpdates).length === 0) {
