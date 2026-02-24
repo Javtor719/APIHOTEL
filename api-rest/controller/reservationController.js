@@ -36,14 +36,25 @@ async function createReservation(req, res) {
       return res.status(400).json({ error: 'Fechas inválidas' });
     }
 
+    const today = startOfHotelDay(new Date());
+
+    if (inDate < today) {
+      return res.status(400).json({ error: 'La fecha de entrada no puede ser anterior a hoy.' });
+    }
+
+    if (outDate <= today) {
+      return res.status(400).json({ error: 'La fecha de salida debe ser posterior a hoy.' });
+    }
+
     //Buscamos colisiones
     const overlap = await Reservation.findOne({
       status: { $ne: 'cancelada' },
       roomIds: { $in: roomIds }, 
       $or: [
-        { checkIn: { $lt: outDate, $gte: inDate } },
-        { checkOut: { $gt: inDate, $lte: outDate } },
-        { checkIn: { $lte: inDate }, checkOut: { $gte: outDate } }
+        {
+          checkIn: { $lt: outDate },
+          checkOut: { $gt: inDate }
+        }
       ]
     });
 

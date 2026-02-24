@@ -10,7 +10,6 @@ const fs = require("fs");
  * - Crear habitación
  * - Eliminar habitación
  * - Mostrar habitaciones disponibles para un rango de fechas
- * - Listar reservas de una habitación por ID
  * - Modificar habitación
  * - Listar todas las habitaciones con filtros
  * - Obtener habitación por ID
@@ -52,7 +51,15 @@ async function addRoom(req, res) {
         if (!Number.isFinite(occ) || occ < 1 || occ > 4) {
             return res.status(400).json({ error: 'Debe de haber entre 1 y 4 huespedes' });
         }
-        
+        let services = [];
+        if (req.body.services) {
+            try {
+                services = JSON.parse(req.body.services);
+                if (!Array.isArray(services)) services = [];
+            } catch {
+                services = [];
+            }
+}
         const numFloorRoom = numF * 100;
         const lastRoom= await Room.findOne({numRoom:{$gte:numFloorRoom,$lt:numFloorRoom+100}}).sort({numRoom:-1});
 
@@ -62,9 +69,11 @@ async function addRoom(req, res) {
         }else{
             nextRoom=lastRoom.numRoom+1
         }
+
         if(nextRoom>=numFloorRoom+100){
             return res.status(400).json({ error: `No se pueden crear más habitaciones en la planta ${numF}` });
         }
+
         const newRoom = new Room({
             numRoom: nextRoom,
             numFloor:numF,
@@ -73,9 +82,10 @@ async function addRoom(req, res) {
             image,
             pricePerNight: price,
             maxOccupancy: occ,
-            availability
+            availability,
+            services
         });
-
+        
         const saved = await newRoom.save();
         return res.status(201).json({
             message: 'Habitación creada correctamente',
@@ -135,7 +145,7 @@ async function deleteRoom(req, res) {
 
         const active = await Reservation.findOne({
             roomId: id,
-            status: { $in: ['confirmada', 'checkin'] }
+            status: { $in: ['confirmada'] }
         });
 
         if (active) {
@@ -222,7 +232,6 @@ async function getAvailableRooms(req, res) {
         });
         }
 
-        //  Mínimo nº habitaciones necesario (greedy: cojo las más grandes primero)
         const sortedCaps = [...availableRooms]
             .map(r => Number(r.maxOccupancy) || 0)
             .sort((a, b) => b - a);
@@ -245,7 +254,7 @@ async function getAvailableRooms(req, res) {
             rooms: availableRooms
             });
         }
-    // Mensajes
+
         if (roomsNeeded <= 1) {
                 return res.status(200).json({
                     code: "SUCCESS",
@@ -270,32 +279,6 @@ async function getAvailableRooms(req, res) {
     }
 }
 
-//Listar reservas de una habitación por ID
-async function getRoomReservations(req, res) {
-    try {
-        const { id } = req.params;
-
-        if (!mongoose.isValidObjectId(id)) {
-            return res.status(400).json({ error: 'ID de habitación no válido' });
-        }
-
-        const room = await Room.findById(id).select('_id numRoom roomType');
-        if (!room) return res.status(404).json({ error: 'Habitación no encontrada' });
-
-        const reservations = await Reservation.find({ roomId: id })
-            .sort({ checkIn: -1 })
-            .populate('userId', 'user_name email role')
-            .populate('roomId', 'numRoom roomType pricePerNight');
-
-        return res.status(200).json({
-            room,
-            reservations
-    });
-    } catch (err) {
-        return res.status(500).json({ error: 'Error al listar reservas de la habitación', detalle: err.message });
-    }
-}
-
 //Modificar habitación
 async function updateRoom(req, res) {
     try {
@@ -310,18 +293,34 @@ async function updateRoom(req, res) {
             return res.status(400).json({ error: 'No hay campos para actualizar' });
         }
 
+        let services = [];
+        if (req.body.services) {
+        try {
+            services = JSON.parse(req.body.services);
+            if (!Array.isArray(services)) services = [];
+        } catch {
+            services = [];
+            }
+        }
+
         const allowedFields = [
             'roomType',
             'description',
             'image',
             'pricePerNight',
             'maxOccupancy',
-            'availability'
+            'availability',
+            'services'
         ];
+
 
         const allowUpdates = {};
         for (const key of Object.keys(updates)) {
             if (allowedFields.includes(key)) allowUpdates[key] = updates[key];
+        }
+
+        if (services !== undefined) {
+            allowUpdates.services = services;
         }
 
         if (Object.keys(allowUpdates).length === 0) {
@@ -409,6 +408,8 @@ const fileFilter = (req, file, cb) => {
 
 const upload = multer({ storage, fileFilter });
 const uploadMany = upload.array("images", 10);
+
+
 async function uploadRoomImages(req, res) {
     try {
     const { id } = req.params;
@@ -434,6 +435,8 @@ async function uploadRoomImages(req, res) {
     return res.status(400).json({ error: "Error subiendo imágenes", detalle: err.message });
     }
 }
+
+
 async function deleteRoomImage(req, res) {
     try {
         const { id } = req.params;
@@ -462,10 +465,11 @@ async function deleteRoomImage(req, res) {
         return res.status(400).json({ error: "Error borrando imagen", detalle: err.message });
     }
 }
+
+
 module.exports = {
     addRoom,
     deleteRoom,
-    getRoomReservations,
     updateRoom,
     getAllRooms,
     getRoomById,
