@@ -14,7 +14,7 @@ function startOfHotelDay(date) {
     return d;
 }
 
-async function createReservation(req, res) {
+async function createReservation(req, res,next) {
   try {
     const { userId, roomIds, checkIn, checkOut, numGuests } = req.body;
     //Validaciones básicas
@@ -98,7 +98,13 @@ async function createReservation(req, res) {
     });
 
     await reservation.save();
-    return res.status(201).json(reservation);
+  
+    req.audit = {
+      reservation
+    };
+
+  next();
+
 
   } catch (err) {
     console.error(err);
@@ -138,7 +144,7 @@ async function createReservation(req, res) {
     }
 }
     
- async function cancelReservation(req, res) {
+  async function cancelReservation(req, res, next) {
     const { id } = req.params;
 
     // Buscamos la reserva primero para validar su estado actual
@@ -158,10 +164,14 @@ async function createReservation(req, res) {
         { new: true, runValidators: false } 
     );
 
-    res.json(updatedReservation);
+    req.audit = {
+      updatedReservation
+    };
+
+    next();
 }
 
-async function checkIn(req, res) {
+async function checkIn(req, res, next) {
     const { id } = req.params;
 
     const reservation = await Reservation.findById(id);
@@ -178,14 +188,19 @@ async function checkIn(req, res) {
     // Actualización directa para saltar validaciones de campos obligatorios faltantes
     const updatedReservation = await Reservation.findByIdAndUpdate(
         id,
-        { status: 'terminada' },
+        { status: 'checkIn' },
         { new: true, runValidators: false }
     );
 
-    res.json(updatedReservation);
+    req.audit = {
+      updatedReservation
+    };
+
+  next();
+
 }
 
-async function checkOut(req, res) {
+async function checkOut(req, res, next) {
     const { id } = req.params;
 
     const reservation = await Reservation.findById(id);
@@ -196,11 +211,15 @@ async function checkOut(req, res) {
     // Actualización directa
     const updatedReservation = await Reservation.findByIdAndUpdate(
         id,
-        { status: 'terminada' },
+        { status: 'checkOut' },
         { new: true, runValidators: false }
     );
 
-    res.json(updatedReservation);
+    req.audit = {
+      updatedReservation
+    };
+
+    next();
 }
 
   async function deleteReservation(req, res) {

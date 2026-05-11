@@ -9,7 +9,7 @@ const reservationSchema = new mongoose.Schema({
     numGuests: { type: Number, required: true, min: 1 },
     status: {
       type: String,
-      enum: ['confirmada', 'terminada', 'cancelada'],
+      enum: ['confirmada','checkIn', 'checkOut','eliminada', 'cancelada'],
       default: 'confirmada'
     }
   });
