@@ -4,14 +4,14 @@ const reservationController = require('../controller/reservationController');
 const { verifyToken ,authorizeRoles } = require('../middleware/authMiddleware.js');
 const { addBookingAuditLog, updateBookingAuditLog } = require('../middleware/bookingAuditLogMiddleware.js');    
 
-//Add reservation (emp, admin)
-router.post('/add', reservationController.createReservation, addBookingAuditLog);
+//Add reservation (emp, admin, usuario)
+router.post('/add', verifyToken, reservationController.createReservation, addBookingAuditLog);
 
 //Delete reservation (emp,admin)
-router.delete('/delete/:id',reservationController.deleteReservation);
+router.delete('/delete/:id', verifyToken, reservationController.deleteReservation);
 
 //Cancelar reserva
-router.patch ('/cancel/:id', reservationController.cancelReservation, updateBookingAuditLog);
+router.patch('/cancel/:id', verifyToken, reservationController.cancelReservation, updateBookingAuditLog);
 
 //List reservation (emp,admin)
 router.get('/',reservationController.listReservations);
@@ -23,9 +23,9 @@ router.get('/my-reservations', verifyToken, authorizeRoles(['Usuario']), reserva
 router.get('/:id', reservationController.getReservation);
 
 // Check-in
-router.patch('/:id/checkin', reservationController.checkIn, updateBookingAuditLog);
+router.patch('/:id/checkin', verifyToken, reservationController.checkIn, updateBookingAuditLog);
 
 // Check-out
-router.patch('/:id/checkout',  reservationController.checkOut, updateBookingAuditLog);
+router.patch('/:id/checkout', verifyToken, reservationController.checkOut, updateBookingAuditLog);
 
 module.exports = router;

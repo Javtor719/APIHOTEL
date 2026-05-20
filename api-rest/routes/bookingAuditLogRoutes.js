@@ -4,6 +4,6 @@ const bookingAuditLogController =  require('../controller/bookingAuditLogControl
 
 
 
-router.get('/booking/:id/audit', bookingAuditLogController.getBookingAuditLog);
+router.get('/:id/audit', bookingAuditLogController.getBookingAuditLog);
 
 module.exports = router;

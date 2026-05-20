@@ -1,17 +1,25 @@
 const mongoose = require('mongoose');
 const BookingAuditLog = require('../models/bookingAuditLog');
-async function addBookingAuditLog(req,res,next){
+async function addBookingAuditLog(req,res){
     try{
         
-        const reservation = req.audit.reservation;
+        const {reservation,actorId,actorType,roomsSnapshot} = req.audit;
 
         await BookingAuditLog.create({
             bookingId: reservation.id,
-            action: "confirmada",
-            actorId: req.user.id,
-            actorType: req.user.rol,
+            action: reservation.status,
+            actorId,
+            actorType,
             previousState: null,
-            newState: reservation.toObject()                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   ,
+            newState:
+            {
+                rooms:roomsSnapshot,
+                comentario: `Reserva Nº ${reservation.reservationNumber} se ha creado`,
+                checkIn: reservation.checkIn,
+                checkOut: reservation.checkOut,
+                guest: reservation.numGuests,
+                status: reservation.status
+            },
         });
 
         return res.status(201).json(reservation);
@@ -20,40 +28,41 @@ async function addBookingAuditLog(req,res,next){
     }
 }
 
-async function updateBookingAuditLog(req,res, next){
+async function updateBookingAuditLog(req,res){
     try{
-            const updatedReservation = req.audit.reservation;
-            if(updatedReservation.req.status !== 'checkIn')
-            {
-                await BookingAuditLog.create({
-                bookingid: reservation.id,
-                action: "checkIn",
-                actorId: req.user.id,
-                actorType: req.user.rol,
-                previousTtate: updatedReservation.req.new_state,
-                newState: updatedReservation.toObject()
-                });
-            }else if (updatedReservation.req.status !== 'checkOut'){
-                await BookingAuditLog.create({
-                bookingId: reservation.id,
-                action: "checkOut",
-                actorId: req.user.id,
-                actorType: req.user.rol,
-                previousState: updatedReservation.req.new_state,
-                newState: updatedReservation.toObject()
-                });
-            } else{
-                await BookingAuditLog.create({
-                bookingId: reservation.id,
-                action: "cancelada",
-                actorId: req.user.id,
-                actorType: req.user.rol,
-                previousState: updatedReservation.req.new_state,
-                newState: updatedReservation.toObject()
-                });
-            }                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
+            let changes = ""
+            const {reservation,actorId,actorType,numGuests,roomsSnapshot} = req.audit;
 
-            return res.status(201).json(updatedReservation);
+            const preBookingAuditLog = await BookingAuditLog.findOne({ bookingId: reservation.id }).sort({ createdAt: -1 });
+
+            if (reservation.status === 'checkIn') {
+                changes = "Reserva se ha registrado check-In";
+            } else if (reservation.status === 'checkOut') {
+                changes = "Reserva se ha registrado check-Out";
+            } else if (reservation.status === 'cancelada') {
+                changes = "Reserva se ha cancelado";
+            } else {
+                changes = "Reserva: " + reservation.status;
+            }
+
+            const createdLog = await BookingAuditLog.create({
+            bookingId: reservation.id,
+            action: reservation.status,
+            actorId,
+            actorType,
+            previousState: preBookingAuditLog ? preBookingAuditLog.newState : null,
+            newState: 
+                {
+                    rooms:roomsSnapshot,
+                    comentario: changes,
+                    checkIn: reservation.checkIn,
+                    checkOut: reservation.checkOut,
+                    guest: reservation.numGuests,
+                    status: reservation.status
+                },
+            });
+
+            return res.status(201).json(createdLog);
         
     }catch (err) {
         return res.status(500).json({ error: 'Error al actualizar audotoría de reserva', detalle: err.message });

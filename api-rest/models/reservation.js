@@ -1,8 +1,14 @@
 const mongoose = require('mongoose');
 
 const reservationSchema = new mongoose.Schema({
+    reservationNumber: { 
+      type: String, 
+      unique: true, 
+      required: true,
+      sparse: true
+    },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    roomIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Room', required: true }],
+    roomIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Room', required: true }],    
     checkIn: { type: Date, required: true },
     checkOut: { type: Date, required: true },
     totalPrice: { type: Number, required: true },
