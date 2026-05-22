@@ -7,6 +7,11 @@ const reservationSchema = new mongoose.Schema({
       required: true,
       sparse: true
     },
+    invoiceNumber: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     roomIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Room', required: true }],    
     checkIn: { type: Date, required: true },
@@ -15,7 +20,7 @@ const reservationSchema = new mongoose.Schema({
     numGuests: { type: Number, required: true, min: 1 },
     status: {
       type: String,
-      enum: ['confirmada','checkIn', 'checkOut','eliminada', 'cancelada'],
+      enum: ['confirmada','checkIn', 'checkOut','eliminada', 'cancelada', 'facturada'],
       default: 'confirmada'
     }
   });
