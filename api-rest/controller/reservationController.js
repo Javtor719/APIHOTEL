@@ -247,6 +247,52 @@ async function listReservations(req, res) {
 }
 
 /**
+ * GET /reservations/dashboard-stats
+ * Devuelve contadores simples para el dashboard
+ */
+async function getDashboardStats(req, res) {
+  try {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const tomorrowStart = new Date(todayStart);
+    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+
+    const activeReservationFilter = { status: { $in: ['confirmada', 'checkIn'] } };
+    const todayCheckInFilter = { status: 'confirmada' };
+    const todayCheckOutFilter = { status: { $in: ['confirmada', 'checkIn', 'checkOut'] } };
+
+    const [
+      totalRooms,
+      todayCheckIns,
+      todayCheckOuts,
+      activeReservations,
+    ] = await Promise.all([
+      Room.countDocuments(),
+      Reservation.countDocuments({
+        ...todayCheckInFilter,
+        checkIn: { $gte: todayStart, $lt: tomorrowStart },
+      }),
+      Reservation.countDocuments({
+        ...todayCheckOutFilter,
+        checkOut: { $gte: todayStart, $lt: tomorrowStart },
+      }),
+      Reservation.countDocuments(activeReservationFilter),
+    ]);
+
+    return res.status(200).json({
+      totalRooms,
+      todayCheckIns,
+      todayCheckOuts,
+      activeReservations,
+    });
+  } catch (err) {
+    console.error('Error obteniendo estadisticas del dashboard:', err);
+    return res.status(500).json({ error: 'Error obteniendo estadisticas del dashboard' });
+  }
+}
+
+/**
  * GET /reservations/:id
  * Retorna una reserva por ID
  */
@@ -960,6 +1006,7 @@ module.exports = {
   startOfHotelDay,
   createReservation,
   listReservations,
+  getDashboardStats,
   getReservation,
   getUserReservations,
   cancelReservation,
