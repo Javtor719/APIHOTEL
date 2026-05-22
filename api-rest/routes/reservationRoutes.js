@@ -16,6 +16,9 @@ router.patch('/cancel/:id', verifyToken, reservationController.cancelReservation
 //List reservation (emp,admin)
 router.get('/',reservationController.listReservations);
 
+// Estadisticas para dashboard (admin, trabajador)
+router.get('/dashboardStats', verifyToken, authorizeRoles(['Admin', 'Trabajador']), reservationController.getDashboardStats);
+
 // Obtener reservas de un user
 router.get('/my-reservations', verifyToken, authorizeRoles(['Usuario']), reservationController.getUserReservations);
 
@@ -31,9 +34,6 @@ router.post('/:id/invoice', verifyToken, reservationController.getInvoicePDF);
 // Historial de facturas por userId
 router.get('/invoices', verifyToken, reservationController.getInvoicesByUser);
 
-// Obtener reserva por ID
-router.get('/:id', reservationController.getReservation);
-
 // Enviar factura por email
 router.post('/:id/invoice-email', verifyToken, reservationController.sendInvoiceEmail);
 
@@ -42,5 +42,8 @@ router.patch('/:id/checkin', verifyToken, reservationController.checkIn, updateB
 
 // Check-out
 router.patch('/:id/checkout', verifyToken, reservationController.checkOut, updateBookingAuditLog);
+
+// Obtener reserva por ID
+router.get('/:id', reservationController.getReservation);
 
 module.exports = router;
