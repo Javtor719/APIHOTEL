@@ -90,7 +90,7 @@ async function addReview(req, res) {
 
     // Validación de solo si ya esta de checkout
         const now = new Date();
-        const ended = reservation.status === 'checkOut' || (reservation.checkOut && new Date(reservation.checkOut) < now);
+        const ended = ['checkOut', 'facturada'].includes(reservation.status) || (reservation.checkOut && new Date(reservation.checkOut) < now);
 
         if (!ended) {
             return res.status(400).json({ error: 'No se puede valorar hasta finalizar la estancia (checkout)' });

@@ -23,7 +23,8 @@ const e = require( "express");
 async function register(req, res) {
     try {
         const isPublic = !req.user;
-        const { firstName, lastName, email, dni, phoneNumber, birthDate, cityName, gender } = req.body;
+        const { firstName, lastName, email, dni, phoneNumber, birthDate, cityName, address, direccion, gender } = req.body;
+        const userAddress = address || direccion;
         var password = req.body.password;
         const birthDateObj = new Date(birthDate);
 
@@ -38,17 +39,18 @@ async function register(req, res) {
         if (!dni) return res.status(400).json({ error: "El dni no puede estar vacio." });
         if (Number.isNaN(birthDateObj.getTime())) return res.status(400).json({ error: "La fecha no puede estar vacia." });
         if (!cityName) return res.status(400).json({ error: "La ciudad no puede estar vacia." });
+        if (!userAddress) return res.status(400).json({ error: "La direccion no puede estar vacia." });
         if (!gender) return res.status(400).json({ error: "Tienes que seleccionar un genero." });
 
         const passHash = await hashPassword(password);
         
-        const baseData = { firstName, lastName, email, password: passHash, dni, phoneNumber, birthDate: birthDateObj, cityName, gender };
+        const baseData = { firstName, lastName, email, password: passHash, dni, phoneNumber, birthDate: birthDateObj, cityName, address: userAddress, gender };
 
         let userEntry;
 
         
         if (isPublic) {
-            userEntry = new UserEntryData(baseData.firstName, baseData.lastName, baseData.email, baseData.password, baseData.dni, baseData.phoneNumber, baseData.birthDate, baseData.cityName, baseData.gender, null);
+            userEntry = new UserEntryData(baseData.firstName, baseData.lastName, baseData.email, baseData.password, baseData.dni, baseData.phoneNumber, baseData.birthDate, baseData.cityName, baseData.address, baseData.gender, null);
         } else{
             const { rol, vipStatus } = req.body;
             userEntry = createBy(req, baseData, { rol, vipStatus });
@@ -89,7 +91,7 @@ function createBy(req, baseData, { rol, vipStatus }) {
     } else {
         throw new Error("No tienes permisos para crear usuarios con rol y estado VIP.");
 }
-    return new UserEntryData(baseData.firstName, baseData.lastName, baseData.email, baseData.password, baseData.dni, baseData.phoneNumber, baseData.birthDate, baseData.cityName, baseData.gender, null, rol, vipStatus);
+    return new UserEntryData(baseData.firstName, baseData.lastName, baseData.email, baseData.password, baseData.dni, baseData.phoneNumber, baseData.birthDate, baseData.cityName, baseData.address, baseData.gender, null, rol, vipStatus);
 }
 
 /**
@@ -228,7 +230,8 @@ async function getUsersByRol(req, res) {
  */
 async function updateUser(req, res) {
     try {
-        const { id, firstName, lastName, email, dni, phoneNumber, birthDate, cityName, gender, imageRoute } = req.body;
+        const { id, firstName, lastName, email, dni, phoneNumber, birthDate, cityName, address, direccion, gender, imageRoute } = req.body;
+        const userAddress = address || direccion;
         const changerRol = req.user.rol;
 
         const birthDateObj = new Date(birthDate);
@@ -239,6 +242,7 @@ async function updateUser(req, res) {
         if (!dni) return res.status(400).json({ error: "El dni no puede estar vacio." });
         if (Number.isNaN(birthDateObj.getTime())) return res.status(400).json({ error: "La fecha no puede estar vacia." });
         if (!cityName) return res.status(400).json({ error: "La ciudad no puede estar vacia." });
+        if (!userAddress) return res.status(400).json({ error: "La direccion no puede estar vacia." });
         if (!gender) return res.status(400).json({ error: "Tienes que seleccionar un genero." });
 
         if (!mongoose.isValidObjectId(id)) return res.status(400).json({ error: 'No es un ID' });
@@ -250,12 +254,12 @@ async function updateUser(req, res) {
         let updateEntry;
 
         if (changerRol === "Usuario" || req.user.id === id) {
-            updateEntry = new UserUpdateData(firstName, lastName, email, dni, phoneNumber, birthDateObj, cityName, gender, imageRoute);
+            updateEntry = new UserUpdateData(firstName, lastName, email, dni, phoneNumber, birthDateObj, cityName, userAddress, gender, imageRoute);
         } else {
             const { rol, vipStatus } = req.body;
 
             if (changerRol === "Trabajador" && rol !== "Usuario") return res.status(400).json({ error: 'Solamente puedes editar a Usuarios.' });
-            updateEntry = new UserAdminUpdateData( firstName, lastName, email, dni, phoneNumber, birthDateObj, cityName, gender, imageRoute, rol, vipStatus);
+            updateEntry = new UserAdminUpdateData( firstName, lastName, email, dni, phoneNumber, birthDateObj, cityName, userAddress, gender, imageRoute, rol, vipStatus);
         }
 
         updateEntry.validate();

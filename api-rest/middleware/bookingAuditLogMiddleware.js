@@ -33,7 +33,7 @@ async function updateBookingAuditLog(req,res){
             let changes = ""
             const {reservation,actorId,actorType,numGuests,roomsSnapshot} = req.audit;
 
-            const preBookingAuditLog = await BookingAuditLog.findOne({ bookingId: reservation.id }).sort({ createdAt: -1 });
+            const preBookingAuditLog = await BookingAuditLog.findOne({ bookingId: reservation.id }).sort({ timestamp: -1 });
 
             if (reservation.status === 'checkIn') {
                 changes = "Reserva se ha registrado check-In";
@@ -41,6 +41,8 @@ async function updateBookingAuditLog(req,res){
                 changes = "Reserva se ha registrado check-Out";
             } else if (reservation.status === 'cancelada') {
                 changes = "Reserva se ha cancelado";
+            } else if (reservation.status === 'facturada') {
+                changes = "Reserva se ha facturado";
             } else {
                 changes = "Reserva: " + reservation.status;
             }
