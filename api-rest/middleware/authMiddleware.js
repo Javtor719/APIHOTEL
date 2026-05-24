@@ -34,6 +34,25 @@ async function verifyToken(req, res, next) {
   }
 }
 
+async function optionalVerifyToken(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return next();
+
+    const [scheme, token] = authHeader.split(" ");
+    if (scheme !== "Bearer" || !token) return next();
+
+    const { payload } = await jwtVerify(token.trim(), JWT_SECRET, {
+      algorithms: ['HS256'],
+    });
+
+    req.user = payload;
+    return next();
+  } catch {
+    return next();
+  }
+}
+
 /**
  * Autorización por roles
  */
@@ -51,6 +70,7 @@ function authorizeRoles(roles = []) {
 
 module.exports = {
   verifyToken,
+  optionalVerifyToken,
   authorizeRoles,
   JWT_SECRET
 };
