@@ -624,7 +624,7 @@ async function getInvoicePDF(req, res) {
     const reservation = await Reservation.findById(id).populate('roomIds');
     if (!reservation) return res.status(404).json({ error: 'Reserva no encontrada' });
 
-    if (!['checkIn', 'facturada'].includes(reservation.status)) {
+    if (!['checkIn', 'checkOut', 'facturada'].includes(reservation.status)) {
       return res.status(400).json({ error: 'Solo se puede facturar una reserva con check-in realizado' });
     }
 
@@ -826,7 +826,13 @@ async function getInvoicesByUser(req, res) {
       return res.status(403).json({ error: 'No autorizado' });
     }
 
-    const invoices = await Reservation.find({ userId, status: 'facturada' }).sort({ invoiceNumber: -1 });
+    const invoices = await Reservation.find({
+      userId,
+      status: { $in: ['checkOut', 'facturada'] },
+      invoiceNumber: { $exists: true, $ne: null },
+    })
+      .populate('roomIds')
+      .sort({ invoiceNumber: -1 });
     res.status(200).json(invoices);
   } catch (err) {
     console.error('Error consultando facturas:', err);

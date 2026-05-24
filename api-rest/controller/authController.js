@@ -26,7 +26,11 @@ async function login(req, res) {
       .setExpirationTime('1h')
       .sign(JWT_SECRET);
 
-    res.json({ token, rol: user.rol });
+    res.json({
+  token,
+  rol: user.rol,
+  userId: String(user._id)
+});
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error del servidor' });
