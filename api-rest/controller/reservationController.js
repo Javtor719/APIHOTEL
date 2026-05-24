@@ -2,6 +2,7 @@ const Reservation = require('../models/reservation');
 const mongoose = require('mongoose');
 const path = require('path');
 const Room = require('../models/rooms');
+const RoomBlock = require('../models/roomBlock');
 const { userDatabaseModel } = require('../models/user');
 const BookingAuditLog = require('../models/bookingAuditLog');
 const PDFDocument = require('pdfkit');
@@ -95,6 +96,15 @@ function validateDates(inDate, outDate) {
  * Verifica disponibilidad de habitaciones en fechas dadas
  */
 async function checkAvailability(roomIds, checkIn, checkOut, excludeReservationId = null) {
+  const unavailableRoom = await Room.findOne({
+    _id: { $in: roomIds },
+    availability: { $ne: 'available' },
+  });
+
+  if (unavailableRoom) {
+    return false;
+  }
+
   const query = {
     status: { $ne: 'cancelada' },
     roomIds: { $in: roomIds },
@@ -111,7 +121,17 @@ async function checkAvailability(roomIds, checkIn, checkOut, excludeReservationI
   }
 
   const overlap = await Reservation.findOne(query);
-  return !overlap;
+  if (overlap) {
+    return false;
+  }
+
+  const blockOverlap = await RoomBlock.findOne({
+    roomId: { $in: roomIds },
+    startDate: { $lt: checkOut },
+    endDate: { $gt: checkIn },
+  });
+
+  return !blockOverlap;
 }
 
 /**
@@ -364,7 +384,7 @@ async function cancelReservation(req, res, next) {
     const updatedReservation = await Reservation.findByIdAndUpdate(
       id,
       { status: 'cancelada' },
-      { new: true, runValidators: false }
+      { returnDocument: 'after', runValidators: false }
     );
 
     const targetReservation = updatedReservation || reservation;
@@ -409,7 +429,7 @@ async function checkIn(req, res, next) {
     const updatedReservation = await Reservation.findByIdAndUpdate(
       id,
       { status: 'checkIn' },
-      { new: true, runValidators: false }
+      { returnDocument: 'after', runValidators: false }
     );
 
     const targetReservation = updatedReservation || reservation;
@@ -540,7 +560,7 @@ async function checkOut(req, res, next) {
     const updatedReservation = await Reservation.findByIdAndUpdate(
       id,
       { status: 'checkOut', invoiceNumber: invoiceNumber },
-      { new: true, runValidators: false }
+      { returnDocument: 'after', runValidators: false }
     );
 
     const targetReservation = updatedReservation || Object.assign(reservation, { status: 'checkOut', invoiceNumber: invoiceNumber });
