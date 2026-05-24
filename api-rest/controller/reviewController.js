@@ -119,7 +119,7 @@ async function addReview(req, res) {
 
         if (stats.length > 0) {
             const avg = Math.round(stats[0].avg * 10) / 10; // 1 decimal
-            await Room.findByIdAndUpdate(roomId, { $set: { rate: avg } }, { new: false });
+            await Room.findByIdAndUpdate(roomId, { $set: { rate: avg } }, { returnDocument: 'before' });
         }
 
         return res.status(201).json({ message: 'Review creada', review: saved });
@@ -160,7 +160,7 @@ async function updateReview(req, res) {
             return res.status(400).json({ error: 'No hay campos para actualizar' });
     }
 
-    const updated = await Review.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
+    const updated = await Review.findByIdAndUpdate(id, updates, { returnDocument: 'after', runValidators: true });
     if (!updated) return res.status(404).json({ error: 'Review no encontrada' });
 
     //Recalculamos el rate promedio del Room si cambió rating

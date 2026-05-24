@@ -25,6 +25,13 @@ router.post('/:id/qr/regenerate', verifyToken, authorizeRoles(['Admin', 'Trabaja
 // Ruta para obtener los registros de escaneo del código QR de una habitación
 router.get('/:id/qr/logs', verifyToken, authorizeRoles(['Admin', 'Trabajador']), roomController.getRoomQrScanLogs);
 
+// Rutas para calendario visual y bloqueos manuales de habitaciones
+router.get('/:id/calendar', roomController.getRoomCalendar);
+
+router.post('/:id/blocks', verifyToken, authorizeRoles(['Admin', 'Trabajador']), roomController.createRoomBlock);
+
+router.delete('/:id/blocks/:blockId', verifyToken, authorizeRoles(['Admin', 'Trabajador']), roomController.deleteRoomBlock);
+
 // Rutas para la gestión de habitaciones
 router.get('/:id', roomController.getRoomById);
 

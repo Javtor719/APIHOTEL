@@ -265,7 +265,7 @@ async function updateUser(req, res) {
         updateEntry.validate();
         const updateObject = updateEntry.toUpdateObject();
 
-        const updated = await userDatabaseModel.findByIdAndUpdate(id, updateObject,{ new: true });
+        const updated = await userDatabaseModel.findByIdAndUpdate(id, updateObject, { returnDocument: 'after' });
 
         return res.status(200).json({ message: 'Usuario actualizado.', user: updated });
     } catch (error) {
