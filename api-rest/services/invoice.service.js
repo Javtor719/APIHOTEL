@@ -1,4 +1,9 @@
 const Counter = require('../models/counter');
+const HOTEL_TIME_ZONE = 'Europe/Madrid';
+
+function formatHotelDate(date = new Date()) {
+    return new Intl.DateTimeFormat('es-ES', { timeZone: HOTEL_TIME_ZONE }).format(date);
+}
 
 function padSeq(seq, width) {
     return String(seq).padStart(width, '0');
@@ -38,4 +43,8 @@ async function getNextInvoiceNumber(format) {
     return out;
 }
 
-module.exports = { getNextInvoiceNumber };
+module.exports = {
+    HOTEL_TIME_ZONE,
+    formatHotelDate,
+    getNextInvoiceNumber,
+};

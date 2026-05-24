@@ -10,6 +10,7 @@ const RoomSchema = new Schema({
     pricePerNight:{type: Number, min:1, required: true},
     maxOccupancy:{type: Number, min:1, max:4,required: true},
     availability:{type:String,enum: ['available', 'unavailable','block'], required: true},
+    qrVersion:{type: Number, default: 1, min: 1},
     services: {
     type: [String],
     enum: ['wifi', 'parking', 'gym', 'towels', 'smoke', 'crib'],

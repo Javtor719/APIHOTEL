@@ -5,8 +5,12 @@ const Room = require('../models/rooms');
 const { userDatabaseModel } = require('../models/user');
 const BookingAuditLog = require('../models/bookingAuditLog');
 const PDFDocument = require('pdfkit');
-const { getNextInvoiceNumber } = require('../services/invoice.service');
+const {
+  formatHotelDate,
+  getNextInvoiceNumber,
+} = require('../services/invoice.service');
 const { sendMail } = require('../services/email.service');
+const { verifyRoomQrToken } = require('../services/roomQr.service');
 
 /**
  * Convierte un valor a Date, retorna null si es inválido
@@ -20,7 +24,7 @@ function parseDate(value) {
  * Normaliza la fecha al inicio del día hotelero (12:00)
  */
 function startOfHotelDay(date) {
-  const d = new Date(date);
+  const d = new Date(date || Date.now());
   d.setHours(12, 0, 0, 0);
   return d;
 }
@@ -75,7 +79,7 @@ function validateDates(inDate, outDate) {
     return { valid: false, error: 'Fechas inválidas' };
   }
 
-  const today = startOfHotelDay(new Date());
+  const today = startOfHotelDay();
   if (inDate < today) {
     return { valid: false, error: 'La fecha de entrada no puede ser anterior a hoy.' };
   }
@@ -421,6 +425,94 @@ async function checkIn(req, res, next) {
 }
 
 /**
+ * POST /bookings/qr-checkin
+ * Hace check-in automatico usando el codigo firmado del QR de la habitacion
+ */
+async function qrCheckIn(req, res) {
+  try {
+    const code = req.body?.code || req.body?.qrCode || req.body?.token;
+    if (!code) {
+      return res.status(400).json({ error: 'Falta el codigo QR' });
+    }
+
+    const payload = await verifyRoomQrToken(code);
+    const roomId = payload.roomId;
+
+    const room = await Room.findById(roomId);
+
+    if (!room) {
+      return res.status(404).json({ error: 'Habitacion no encontrada' });
+    }
+
+    if (Number(payload.qrVersion) !== Number(room.qrVersion || 1)) {
+      return res.status(410).json({ error: 'QR invalidado. Escanea el QR nuevo de la habitacion.' });
+    }
+
+    const userId = req.user.userId || req.user.id || req.user._id;
+
+    if (!userId) {
+      return res.status(401).json({
+        error: 'No se pudo identificar el usuario del token'
+      });
+    }
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const tomorrowStart = new Date(todayStart);
+    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+
+    const activeStayFilter = {
+      userId: userId,
+      roomIds: roomId,
+      checkIn: { $lt: tomorrowStart },
+      checkOut: { $gt: todayStart },
+    };
+
+    console.log('QR CHECKIN USER ID:', userId);
+    console.log('QR CHECKIN ROOM ID:', roomId);
+    console.log('QR CHECKIN FILTER:', activeStayFilter);
+
+    const alreadyCheckedIn = await Reservation.findOne({
+      ...activeStayFilter,
+      status: 'checkIn',
+    }).populate('roomIds');
+
+    if (alreadyCheckedIn) {
+      return res.status(200).json({
+        message: 'Check-in ya realizado',
+        reservation: alreadyCheckedIn,
+      });
+    }
+
+    const reservation = await Reservation.findOne({
+      ...activeStayFilter,
+      status: 'confirmada',
+    });
+
+    if (!reservation) {
+      return res.status(404).json({
+        error: 'No tienes check-in disponible para esta habitación el día de hoy',
+      });
+    }
+
+    reservation.status = 'checkIn';
+    await reservation.save();
+    await addReservationStatusAuditLog(reservation, req.user, 'Check-in realizado mediante QR');
+
+    const updatedReservation = await Reservation.findById(reservation._id).populate('roomIds');
+
+    return res.status(200).json({
+      message: 'Check-in realizado correctamente',
+      reservation: updatedReservation,
+    });
+  } catch (err) {
+    console.error('Error realizando check-in por QR:', err);
+    return res.status(400).json({ error: 'QR invalido o check-in no permitido' });
+  }
+}
+
+/**
  * PATCH /reservations/:id/checkout
  * Registra el check-out de una reserva (checkIn -> checkOut)
  */
@@ -566,8 +658,8 @@ async function getInvoicePDF(req, res) {
     // Calcular noches
     const diffInMs = reservation.checkOut.getTime() - reservation.checkIn.getTime();
     const nights = Math.ceil(diffInMs / (1000 * 60 * 60 * 24));
-    const checkInText = reservation.checkIn ? reservation.checkIn.toLocaleDateString() : '';
-    const checkOutText = reservation.checkOut ? reservation.checkOut.toLocaleDateString() : '';
+    const checkInText = reservation.checkIn ? formatHotelDate(reservation.checkIn) : '';
+    const checkOutText = reservation.checkOut ? formatHotelDate(reservation.checkOut) : '';
     const taxes = parseFloat(process.env.DEFAULT_TAX || '0.21');
     const extras = 0;
     
@@ -625,7 +717,7 @@ async function getInvoicePDF(req, res) {
     drawCell(doc, 305, 250, 60, 30, 'F. Entrada',checkInText);
     drawCell(doc, 365, 250, 60, 30, 'F. Salida', checkOutText);
     drawCell(doc, 425, 250, 80, 30, 'Nº de factura', reservation.invoiceNumber || '');
-    drawCell(doc, 505, 250, 70, 30, 'F. factura', new Date().toLocaleDateString());
+    drawCell(doc, 505, 250, 70, 30, 'F. factura', formatHotelDate());
 
     doc.rect(50, 320, 500, 25).stroke();
 
@@ -803,7 +895,7 @@ function buildInvoiceEmailPdf({ reservation, user, roomSummary, checkInText, che
     drawCell(doc, 305, 250, 60, 30, 'F. Entrada', checkInText);
     drawCell(doc, 365, 250, 60, 30, 'F. Salida', checkOutText);
     drawCell(doc, 425, 250, 80, 30, 'Nº de factura', reservation.invoiceNumber || '');
-    drawCell(doc, 505, 250, 70, 30, 'F. factura', new Date().toLocaleDateString());
+    drawCell(doc, 505, 250, 70, 30, 'F. factura', formatHotelDate());
 
     doc.rect(50, 320, 500, 25).stroke();
 
@@ -909,8 +1001,8 @@ async function sendInvoiceEmail(req, res) {
       .filter(Boolean)
       .join(', ');
 
-    const checkInText = reservation.checkIn ? reservation.checkIn.toLocaleDateString() : '';
-    const checkOutText = reservation.checkOut ? reservation.checkOut.toLocaleDateString() : '';
+    const checkInText = reservation.checkIn ? formatHotelDate(reservation.checkIn) : '';
+    const checkOutText = reservation.checkOut ? formatHotelDate(reservation.checkOut) : '';
     const clientName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
     const hotelName = process.env.HOTEL_NAME || 'PERE MARIA';
     const invoicePdf = await buildInvoiceEmailPdf({
@@ -1011,6 +1103,7 @@ module.exports = {
   getUserReservations,
   cancelReservation,
   checkIn,
+  qrCheckIn,
   checkOut,
   getInvoicePDF,
   getInvoicesByUser,

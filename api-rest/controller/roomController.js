@@ -5,6 +5,28 @@ const { parseDate, startOfHotelDay } = require("../controller/reservationControl
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const QRCode = require("qrcode");
+const { createRoomQrToken, verifyRoomQrToken } = require("../services/roomQr.service");
+const RoomQrScanLog = require("../models/roomQrScanLog");
+const crypto = require("crypto");
+
+function hashQrCode(code = "") {
+    return crypto.createHash("sha256").update(String(code)).digest("hex");
+}
+
+async function saveQrScanLog(req, { code, room = null, result, message = "" }) {
+    await RoomQrScanLog.create({
+        roomId: room ? room._id : null,
+        numRoom: room ? room.numRoom : null,
+        actorId: req.user ? String(req.user.id) : null,
+        actorRole: req.user ? req.user.rol : null,
+        result,
+        message,
+        codeHash: hashQrCode(code),
+        ip: req.ip || "",
+        userAgent: req.get("user-agent") || "",
+    });
+}
 /**
  * Gestión de Habitaciones:
  * - Crear habitación
@@ -393,6 +415,139 @@ async function getRoomById(req, res) {
         return res.status(500).json({ error: 'Error al obtener habitación', detalle: err.message });
     }
 }
+
+async function getRoomQr(req, res) {
+    try {
+        const { id } = req.params;
+
+        if (!mongoose.isValidObjectId(id)) {
+            return res.status(400).json({ error: "ID de habitacion no valido" });
+        }
+
+        const room = await Room.findById(id);
+        if (!room) return res.status(404).json({ error: "Habitacion no encontrada" });
+
+        const code = await createRoomQrToken(room);
+        const baseUrl = process.env.QR_ROOM_BASE_URL || `${req.protocol}://${req.get("host")}/rooms/scan`;
+        const qrUrl = `${baseUrl}/${encodeURIComponent(code)}`;
+        const png = await QRCode.toBuffer(qrUrl, {
+            type: "png",
+            errorCorrectionLevel: "M",
+            margin: 2,
+            width: 320,
+        });
+
+        res.setHeader("Content-Type", "image/png");
+        res.setHeader("Content-Disposition", `inline; filename="room-${room.numRoom}-qr.png"`);
+        res.setHeader("Cache-Control", "no-store");
+        return res.status(200).send(png);
+    } catch (err) {
+        console.error("Error generando QR de habitacion:", err);
+        return res.status(500).json({ error: "Error generando QR de habitacion" });
+    }
+}
+
+async function scanRoomQr(req, res) {
+    const { code } = req.params;
+
+    try {
+        const payload = await verifyRoomQrToken(code);
+
+        const room = await Room.findById(payload.roomId);
+        if (!room) {
+            await saveQrScanLog(req, {
+                code,
+                result: "room_not_found",
+                message: "La habitacion del QR no existe"
+            });
+            return res.status(404).json({ error: "Habitacion no encontrada" });
+        }
+
+        if (Number(payload.qrVersion) !== Number(room.qrVersion || 1)) {
+            await saveQrScanLog(req, {
+                code,
+                room,
+                result: "revoked",
+                message: "El QR fue regenerado y este codigo ya no es valido"
+            });
+            return res.status(410).json({ error: "QR invalidado. Genera o escanea el QR nuevo." });
+        }
+
+        await saveQrScanLog(req, {
+            code,
+            room,
+            result: "success",
+            message: "QR escaneado correctamente"
+        });
+
+        return res.status(200).json({
+            code,
+            room,
+        });
+    } catch (err) {
+        await saveQrScanLog(req, {
+            code,
+            result: "invalid",
+            message: "QR invalido o manipulado"
+        });
+        return res.status(400).json({ error: "QR invalido o manipulado" });
+    }
+}
+
+async function regenerateRoomQr(req, res) {
+    try {
+        const { id } = req.params;
+
+        if (!mongoose.isValidObjectId(id)) {
+            return res.status(400).json({ error: "ID de habitacion no valido" });
+        }
+
+        const room = await Room.findByIdAndUpdate(
+            id,
+            { $inc: { qrVersion: 1 } },
+            { new: true }
+        );
+
+        if (!room) return res.status(404).json({ error: "Habitacion no encontrada" });
+
+        const code = await createRoomQrToken(room);
+        const baseUrl = process.env.QR_ROOM_BASE_URL || `${req.protocol}://${req.get("host")}/rooms/scan`;
+        const qrUrl = `${baseUrl}/${encodeURIComponent(code)}`;
+
+        return res.status(200).json({
+            message: "QR regenerado correctamente. Los QR anteriores quedan invalidados.",
+            roomId: room._id,
+            numRoom: room.numRoom,
+            qrVersion: room.qrVersion,
+            code,
+            qrUrl,
+            qrImageUrl: `${req.protocol}://${req.get("host")}/rooms/${room._id}/qr`
+        });
+    } catch (err) {
+        console.error("Error regenerando QR de habitacion:", err);
+        return res.status(500).json({ error: "Error regenerando QR de habitacion" });
+    }
+}
+
+async function getRoomQrScanLogs(req, res) {
+    try {
+        const { id } = req.params;
+
+        if (!mongoose.isValidObjectId(id)) {
+            return res.status(400).json({ error: "ID de habitacion no valido" });
+        }
+
+        const limit = Math.min(Number(req.query.limit) || 100, 500);
+        const logs = await RoomQrScanLog.find({ roomId: id })
+            .sort({ scannedAt: -1 })
+            .limit(limit);
+
+        return res.status(200).json(logs);
+    } catch (err) {
+        console.error("Error obteniendo logs de QR:", err);
+        return res.status(500).json({ error: "Error obteniendo logs de QR" });
+    }
+}
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, "uploads/rooms"),
     filename: (req, file, cb) => {
@@ -477,5 +632,9 @@ module.exports = {
     uploadMany,
     uploadRoomImages,
     deleteRoomImage,
-    getAvailableRooms
+    getAvailableRooms,
+    getRoomQr,
+    scanRoomQr,
+    regenerateRoomQr,
+    getRoomQrScanLogs,
 };

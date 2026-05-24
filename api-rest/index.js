@@ -1,3 +1,5 @@
+process.env.TZ = 'Europe/Madrid';
+
 const express = require ('express');
 const mongoose = require('mongoose');
 require('dotenv').config();
@@ -12,6 +14,12 @@ const  bookingAuditLogRoutes  = require('./routes/bookingAuditLogRoutes');
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// app.use((req, res, next) => {
+//   console.log("REQUEST:", req.method, req.originalUrl);
+//   next();
+// });
+
 //Ver imagenes por url
 app.use('/uploads', express.static('uploads'));
 

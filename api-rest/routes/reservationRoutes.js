@@ -7,6 +7,9 @@ const { addBookingAuditLog, updateBookingAuditLog } = require('../middleware/boo
 //Add reservation (emp, admin, usuario)
 router.post('/add', verifyToken, reservationController.createReservation, addBookingAuditLog);
 
+// QR Check-in (usuario)
+router.post('/qr-checkin', verifyToken, authorizeRoles(['Usuario']), reservationController.qrCheckIn);
+
 //Delete reservation (emp,admin)
 router.delete('/delete/:id', verifyToken, reservationController.deleteReservation);
 
