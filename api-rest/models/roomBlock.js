@@ -1,3 +1,13 @@
+/*
+ * =============================================
+ * Author:Javier Orosco Torres
+ * Create date: 21/05/2026
+ * Description:
+ *      Modelo Mongoose para bloqueos manuales de habitaciones.
+ *      Guarda rango de fechas, motivo y usuario creador del bloqueo.
+ *      Indexa habitacion y fechas para consultar solapes rapidamente.
+ * =============================================
+ */
 const mongoose = require('mongoose');
 
 const roomBlockSchema = new mongoose.Schema({

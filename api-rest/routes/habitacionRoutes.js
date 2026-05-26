@@ -1,53 +1,37 @@
+/*
+ * =============================================
+ * Author:Javier Orosco Torres
+ * Create date: 21/05/2026
+ * Description:
+ *      Rutas de habitaciones.
+ *      Gestiona listado, detalle, disponibilidad, calendario y bloqueos.
+ *      Permite crear, modificar, eliminar y subir imagenes de habitaciones.
+ *      Expone generacion, regeneracion, escaneo y logs de codigos QR.
+ *      Protege las operaciones QR y bloqueos con JWT y roles Admin/Trabajador.
+ * =============================================
+ */
 const express = require('express');
-const router = express.Router();
-const roomController =  require('../controller/roomController');
+const roomController = require('../controller/roomController');
 const { verifyToken, optionalVerifyToken, authorizeRoles } = require('../middleware/authMiddleware');
 
+const router = express.Router();
+const staffOnly = [verifyToken, authorizeRoles(['Admin', 'Trabajador'])];
 
-// Rutas para habitaciones
 router.get('/', roomController.getAllRooms);
-
-// Ruta para obtener habitaciones disponibles
-router.get("/available", roomController.getAvailableRooms);
-
-// Ruta para obtener la siguiente habitación disponible en un piso específico
-router.get('/nextRoom/:floor',roomController.nextRoom);
-
-// Ruta para escanear el código QR de una habitación
+router.get('/available', roomController.getAvailableRooms);
+router.get('/nextRoom/:floor', roomController.nextRoom);
 router.get('/scan/:code', optionalVerifyToken, roomController.scanRoomQr);
-
-// Rutas para la gestión de códigos QR de habitaciones
-router.get('/:id/qr', verifyToken, authorizeRoles(['Admin', 'Trabajador']), roomController.getRoomQr);
-
-// Ruta para regenerar el código QR de una habitación
-router.post('/:id/qr/regenerate', verifyToken, authorizeRoles(['Admin', 'Trabajador']), roomController.regenerateRoomQr);
-
-// Ruta para obtener los registros de escaneo del código QR de una habitación
-router.get('/:id/qr/logs', verifyToken, authorizeRoles(['Admin', 'Trabajador']), roomController.getRoomQrScanLogs);
-
-// Rutas para calendario visual y bloqueos manuales de habitaciones
+router.get('/:id/qr', staffOnly, roomController.getRoomQr);
+router.post('/:id/qr/regenerate', staffOnly, roomController.regenerateRoomQr);
+router.get('/:id/qr/logs', staffOnly, roomController.getRoomQrScanLogs);
 router.get('/:id/calendar', roomController.getRoomCalendar);
-
-router.post('/:id/blocks', verifyToken, authorizeRoles(['Admin', 'Trabajador']), roomController.createRoomBlock);
-
-router.delete('/:id/blocks/:blockId', verifyToken, authorizeRoles(['Admin', 'Trabajador']), roomController.deleteRoomBlock);
-
-// Rutas para la gestión de habitaciones
+router.post('/:id/blocks', staffOnly, roomController.createRoomBlock);
+router.delete('/:id/blocks/:blockId', staffOnly, roomController.deleteRoomBlock);
 router.get('/:id', roomController.getRoomById);
-
-// Rutas para la gestión de habitaciones (solo para Admin y Trabajador)
-router.post('/add', roomController.addRoom );
-
-// Ruta para actualizar la información de una habitación
-router.patch('/modify/:id',roomController.updateRoom );
-
-// Ruta para eliminar una habitación
-router.delete('/delete/:id',roomController.deleteRoom );
-
-// Rutas para la gestión de imágenes de habitaciones
+router.post('/add', roomController.addRoom);
+router.patch('/modify/:id', roomController.updateRoom);
+router.delete('/delete/:id', roomController.deleteRoom);
 router.post('/add/:id/images', roomController.uploadMany, roomController.uploadRoomImages);
-
-// Ruta para eliminar una imagen de una habitación
 router.delete('/delete/:id/images', roomController.deleteRoomImage);
 
 module.exports = router;

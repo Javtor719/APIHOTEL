@@ -1,3 +1,14 @@
+/*
+ * =============================================
+ * Author: Javier Orosco Torres
+ * Create date: 21/05/2026
+ * Description:
+ *      Modelo Mongoose para logs de escaneo QR de habitaciones.
+ *      Registra el resultado del escaneo, actor, IP, user-agent y hash
+ *      del codigo sin almacenar el token completo.
+ *      Permite auditar QR validos, revocados, invalidos o sin habitacion.
+ * =============================================
+ */
 const mongoose = require('mongoose');
 
 const roomQrScanLogSchema = new mongoose.Schema({

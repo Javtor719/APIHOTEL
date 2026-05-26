@@ -1,4 +1,17 @@
-const {Schema, model, default: mongoose } = require('mongoose');
+/*
+ * =============================================
+ * Author: Miguel Ángel Águila Morillas y Javier Orosco Torres
+ * Create date: 14/02/2026
+ * Description:
+ *      Modelo Mongoose y clases de validacion para usuarios.
+ *      Define datos personales, credenciales, rol, imagen y estado VIP.
+ *      Centraliza validaciones de alta y actualizacion antes de crear
+ *      documentos o payloads de MongoDB.
+ *      Protege el campo password para que no se devuelva en consultas
+ *      salvo cuando se solicite expresamente.
+ * =============================================
+ */
+const { Schema, default: mongoose } = require('mongoose');
 
 /**
  * @typedef {Object} User

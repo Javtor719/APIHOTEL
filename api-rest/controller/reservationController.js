@@ -1,3 +1,16 @@
+/*
+ * =============================================
+ * Author: Miguel Ángel Águila Morillas y Javier Orosco Torres
+ * Create date: 23/05/2026
+ * Description:
+ *      Controlador de reservas.
+ *      Valida fechas hoteleras, disponibilidad, bloqueos y capacidad.
+ *      Calcula precios, descuentos VIP y numeros de reserva/factura.
+ *      Gestiona estados de reserva: confirmada, cancelada, check-in,
+ *      check-out y facturada.
+ *      Genera facturas PDF, prepara auditoria y envia facturas por email.
+ * =============================================
+ */
 const Reservation = require('../models/reservation');
 const mongoose = require('mongoose');
 const path = require('path');
@@ -166,7 +179,6 @@ async function calculatePrice(roomIds, checkIn, checkOut, userId) {
  */
 async function generateReservationNumber() {
   try {
-    // Buscar la reserva con el número más alto
     const lastReservation = await Reservation.findOne()
       .sort({ reservationNumber: -1 })
       .select('reservationNumber');
@@ -178,7 +190,6 @@ async function generateReservationNumber() {
     const lastNumber = parseInt(lastReservation.reservationNumber, 10);
     const nextNumber = lastNumber + 1;
     
-    // Formato con 5 dígitos (00001 a 99999)
     return String(nextNumber).padStart(5, '0');
   } catch (err) {
     console.error('Error generando número de reserva:', err);
@@ -193,12 +204,10 @@ async function generateReservationNumber() {
 async function createReservation(req, res, next) {
   try {
     const { userId, roomIds, checkIn, checkOut, numGuests } = req.body;
-    //Validaciones básicas
     if (!userId || !roomIds || !Array.isArray(roomIds) || roomIds.length === 0) {
       return res.status(400).json({ error: 'Debes seleccionar al menos una habitación' });
     }
 
-    // Parsear y normalizar fechas
     const inDateRaw = parseDate(checkIn);
     const outDateRaw = parseDate(checkOut);
 
@@ -209,13 +218,11 @@ async function createReservation(req, res, next) {
     const inDate = startOfHotelDay(inDateRaw);
     const outDate = startOfHotelDay(outDateRaw);
 
-    // Validar rango de fechas
     const dateValidation = validateDates(inDate, outDate);
     if (!dateValidation.valid) {
       return res.status(400).json({ error: dateValidation.error });
     }
 
-    // Verificar disponibilidad
     const isAvailable = await checkAvailability(roomIds, inDate, outDate);
     if (!isAvailable) {
       return res.status(409).json({
@@ -223,16 +230,13 @@ async function createReservation(req, res, next) {
       });
     }
 
-    // Calcular precio
     const finalPrice = await calculatePrice(roomIds, inDate, outDate, userId);
     if (finalPrice === null) {
       return res.status(404).json({ error: 'Una o más habitaciones no existen.' });
     }
 
-    // Generar número de reserva único
     const reservationNumber = await generateReservationNumber();
 
-    // Crear reserva
     const reservation = new Reservation({
       reservationNumber,
       userId,
@@ -245,7 +249,6 @@ async function createReservation(req, res, next) {
 
     await reservation.save();
 
-    // Preparar datos para auditoría
     req.audit = await buildAuditData(reservation, req.user);
 
     next();
@@ -364,23 +367,19 @@ async function cancelReservation(req, res, next) {
   try {
     const { id } = req.params;
 
-    // Validar ID
     if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({ error: 'ID inválido' });
     }
 
-    // Obtener reserva actual
     const reservation = await Reservation.findById(id);
     if (!reservation) {
       return res.status(404).json({ error: 'Reserva no encontrada' });
     }
 
-    // Validar estado
     if (reservation.status !== 'confirmada') {
       return res.status(400).json({ error: 'Solo se pueden cancelar reservas confirmadas' });
     }
 
-    // Actualizar estado
     const updatedReservation = await Reservation.findByIdAndUpdate(
       id,
       { status: 'cancelada' },
@@ -389,7 +388,6 @@ async function cancelReservation(req, res, next) {
 
     const targetReservation = updatedReservation || reservation;
 
-    // Preparar datos para auditoría
     req.audit = await buildAuditData(targetReservation, req.user);
 
     next();
@@ -407,25 +405,21 @@ async function checkIn(req, res, next) {
   try {
     const { id } = req.params;
 
-    // Validar ID
     if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({ error: 'ID inválido' });
     }
 
-    // Obtener reserva actual
     const reservation = await Reservation.findById(id);
     if (!reservation) {
       return res.status(404).json({ error: 'Reserva no encontrada' });
     }
 
-    // Validar estado
     if (reservation.status !== 'confirmada') {
       return res.status(400).json({
         error: 'Solo se puede hacer check-in a reservas confirmadas',
       });
     }
 
-    // Actualizar estado
     const updatedReservation = await Reservation.findByIdAndUpdate(
       id,
       { status: 'checkIn' },
@@ -434,7 +428,6 @@ async function checkIn(req, res, next) {
 
     const targetReservation = updatedReservation || reservation;
 
-    // Preparar datos para auditoría
     req.audit = await buildAuditData(targetReservation, req.user);
 
     next();
@@ -489,10 +482,6 @@ async function qrCheckIn(req, res) {
       checkOut: { $gt: todayStart },
     };
 
-    console.log('QR CHECKIN USER ID:', userId);
-    console.log('QR CHECKIN ROOM ID:', roomId);
-    console.log('QR CHECKIN FILTER:', activeStayFilter);
-
     const alreadyCheckedIn = await Reservation.findOne({
       ...activeStayFilter,
       status: 'checkIn',
@@ -540,18 +529,15 @@ async function checkOut(req, res, next) {
   try {
     const { id } = req.params;
 
-    // Validar ID
     if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({ error: 'ID inválido' });
     }
 
-    // Obtener reserva actual
     const reservation = await Reservation.findById(id);
     if (!reservation) {
       return res.status(404).json({ error: 'Reserva no encontrada' });
     }
 
-    // Asignar invoiceNumber si no existe y actualizar estado a checkOut
     let invoiceNumber = reservation.invoiceNumber;
     if (!invoiceNumber) {
       invoiceNumber = await getNextInvoiceNumber();
@@ -565,7 +551,6 @@ async function checkOut(req, res, next) {
 
     const targetReservation = updatedReservation || Object.assign(reservation, { status: 'checkOut', invoiceNumber: invoiceNumber });
 
-    // Preparar datos para auditoría
     req.audit = await buildAuditData(targetReservation, req.user);
 
     next();
@@ -630,7 +615,6 @@ async function getInvoicePDF(req, res) {
 
     const shouldCreateInvoiceAudit = reservation.status !== 'facturada';
 
-    // Asegurar invoiceNumber y marcar como facturada
     if (!reservation.invoiceNumber) {
       const inv = await getNextInvoiceNumber();
       reservation.invoiceNumber = inv;
@@ -648,7 +632,6 @@ async function getInvoicePDF(req, res) {
 
     const user = await userDatabaseModel.findById(reservation.userId);
 
-    // Datos hotel (configurables vía env)
     const hotel = {
       name: overrides.hotel?.name || process.env.HOTEL_NAME || 'PERE MARIA',
       address: overrides.hotel?.address || process.env.HOTEL_ADDRESS || 'Calle Alcala 123, 03503 Benidorm\nAlicante España',
@@ -675,7 +658,6 @@ async function getInvoicePDF(req, res) {
       .filter(Boolean)
       .join(', ');
 
-    // Calcular noches
     const diffInMs = reservation.checkOut.getTime() - reservation.checkIn.getTime();
     const nights = Math.ceil(diffInMs / (1000 * 60 * 60 * 24));
     const checkInText = reservation.checkIn ? formatHotelDate(reservation.checkIn) : '';
@@ -699,7 +681,6 @@ async function getInvoicePDF(req, res) {
     const taxesAmount = subtotal * taxes;
     const total = subtotal + taxesAmount
 
-    // Crear PDF
     res.setHeader('Content-Type', 'application/pdf');
     const invoiceFileName = reservation.invoiceNumber ? reservation.invoiceNumber : `temp-${Date.now()}`;
     res.setHeader('Content-Disposition', `attachment; filename="invoice-${invoiceFileName}.pdf"`);
@@ -819,7 +800,6 @@ async function getInvoicesByUser(req, res) {
       return res.status(400).json({ error: 'userId inválido' });
     }
 
-    // Authorization: el propio usuario o Admin/Trabajador
     if (!req.user) return res.status(401).json({ error: 'No autenticado' });
     const allowedRoles = ['Admin', 'Trabajador'];
     if (req.user.id !== userId && !allowedRoles.includes(req.user.rol)) {
@@ -1094,12 +1074,10 @@ async function deleteReservation(req, res) {
   try {
     const { id } = req.params;
 
-    // Validar ID
     if (!id || !mongoose.isValidObjectId(id)) {
       return res.status(400).json({ error: 'ID inválido' });
     }
 
-    // Obtener reserva
     const reservation = await Reservation.findById(id);
     if (!reservation) {
       return res.status(404).json({ error: 'Reserva no encontrada' });
@@ -1109,7 +1087,6 @@ async function deleteReservation(req, res) {
       return res.status(400).json({ error: 'Solo se pueden eliminar reservas canceladas' });
     }
 
-    // Eliminar
     await Reservation.findByIdAndDelete(id);
 
     res.status(200).json({ message: 'Reserva eliminada correctamente' });

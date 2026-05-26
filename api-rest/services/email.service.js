@@ -1,3 +1,15 @@
+/*
+ * =============================================
+ * Author: Javier Orosco Torres
+ * Create date: 21/05/2026
+ * Description:
+ *      Servicio de envio de correos mediante SMTP y Nodemailer.
+ *      Lee la configuracion obligatoria desde variables de entorno.
+ *      Crea el transporter bajo demanda para usar siempre la configuracion
+ *      actual del proceso.
+ *      Expone una funcion reutilizable para enviar HTML, texto y adjuntos.
+ * =============================================
+ */
 const nodemailer = require('nodemailer');
 
 function getRequiredEnv(name) {

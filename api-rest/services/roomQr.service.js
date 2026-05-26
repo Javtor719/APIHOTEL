@@ -1,3 +1,14 @@
+/*
+ * =============================================
+ * Author: Javier Orosco Torres
+ * Create date: 21/05/2026
+ * Description:
+ *      Servicio de codigos QR firmados para habitaciones.
+ *      Crea tokens JWT con el identificador de habitacion, numero y version QR.
+ *      Verifica que el codigo recibido sea valido y pertenezca al tipo room-qr.
+ *      Permite invalidar QR antiguos al comparar la version guardada en la habitacion.
+ * =============================================
+ */
 const { SignJWT, jwtVerify } = require("jose");
 const { TextEncoder } = require("util");
 const mongoose = require("mongoose");

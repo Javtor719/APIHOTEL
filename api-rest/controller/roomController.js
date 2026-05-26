@@ -1,3 +1,15 @@
+/*
+ * =============================================
+ * Author:  Javier Orosco Torres
+ * Create date: 14/02/2026
+ * Description:
+ *      Controlador de habitaciones.
+ *      Crea, lista, modifica y elimina habitaciones del hotel.
+ *      Calcula disponibilidad por fechas combinando reservas y bloqueos.
+ *      Gestiona calendario mensual, bloqueos manuales e imagenes.
+ *      Genera, valida, regenera y audita codigos QR de habitacion.
+ * =============================================
+ */
 const mongoose = require('mongoose');
 const Room = require('../models/rooms');
 const Reservation = require('../models/reservation');
@@ -28,17 +40,6 @@ async function saveQrScanLog(req, { code, room = null, result, message = "" }) {
         userAgent: req.get("user-agent") || "",
     });
 }
-/**
- * Gestión de Habitaciones:
- * - Crear habitación
- * - Eliminar habitación
- * - Mostrar habitaciones disponibles para un rango de fechas
- * - Modificar habitación
- * - Listar todas las habitaciones con filtros
- * - Obtener habitación por ID
- * @Javtor719
- */
-//Crear habitación
 async function addRoom(req, res) {
     try {
         const {
@@ -129,7 +130,6 @@ async function addRoom(req, res) {
         return res.status(500).json({ error: 'Error al crear habitación', detalle: err.message });
     }
 }
-//Darme la siguiente habitación
 async function nextRoom(req,res){
     try{
         const numF = Number(req.params.floor);
@@ -157,7 +157,6 @@ async function nextRoom(req,res){
         return res.status(500).json({ error: 'Error al visualizar nueva habitacion', detalle: err.message });
     }
 }
-//Eliminar habitación por ID
 async function deleteRoom(req, res) {
     try {
         const { id } = req.params;
@@ -196,7 +195,6 @@ async function deleteRoom(req, res) {
     }
 }
 
-//mostrar habitaciones disponibles para un rango de fechas
 async function getAvailableRooms(req, res) {
     try {
         const { checkIn, checkOut, guests } = req.query;
@@ -220,7 +218,6 @@ async function getAvailableRooms(req, res) {
             return res.status(400).json({ error: "La fecha de entrada debe ser anterior a la de salida" });
         }
 
-        //Buscamos qué habitaciones están ocupadas en esas fechas
         const overlapping = await Reservation.find({
             status: { $ne: "cancelada" },
             checkIn: { $lt: outDate },
@@ -528,7 +525,6 @@ async function deleteRoomBlock(req, res) {
     }
 }
 
-//Modificar habitación
 async function updateRoom(req, res) {
     try {
         const { id } = req.params;
@@ -600,7 +596,6 @@ async function updateRoom(req, res) {
         return res.status(500).json({ error: 'Error al actualizar habitación', detalle: err.message });
     }
 }
-//Obtener todas las habitaciones aplicando filtros en el query
 async function getAllRooms(req, res) {
     try {
         const { roomType, availability, minPrice, maxPrice } = req.query;
@@ -625,7 +620,6 @@ async function getAllRooms(req, res) {
 
 
 
-// Obtener una habitación por id
 async function getRoomById(req, res) {
     try {
         const { id } = req.params;
@@ -837,7 +831,7 @@ async function deleteRoomImage(req, res) {
 
         if (!updated) return res.status(404).json({ error: "Habitación no encontrada" });
 
-        // best effort para borrar la imagen del disco, esto hará que no se para el proceso si por alguna razón no se borra la imagen del disco.
+        // Borrado no critico: si falla el fichero, la respuesta de BD sigue siendo valida.
         const diskPath = path.join(__dirname, "..", image); 
         fs.unlink(diskPath, () => {});
 

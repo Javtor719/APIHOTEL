@@ -1,17 +1,19 @@
+/*
+ * =============================================
+ * Author: Javier Orosco Torres
+ * Create date: 21/05/2026
+ * Description:
+ *      Controlador de reviews de habitaciones.
+ *      Permite consultar reviews por ID, habitacion o reserva.
+ *      Valida que el usuario haya finalizado una estancia antes de valorar.
+ *      Crea, modifica y elimina reviews evitando duplicados por reserva.
+ *      Recalcula la puntuacion media de la habitacion tras cada cambio.
+ * =============================================
+ */
 const mongoose = require('mongoose');
 const Review = require('../models/reviews');
 const Reservation = require('../models/reservation');
 const Room = require('../models/rooms');
-
-/**
- * Reviews:
- * - Crear review (solo si existe reserva válida del usuario para esa habitación)
- * - Obtener review por id
- * - Listar reviews de una habitación
- * - Modificar review
- * - Borrar review
- * @Javtor719
- */
 
 async function getReviewById(req, res) {
     try {
@@ -56,7 +58,6 @@ async function addReview(req, res) {
         const userId = req.user.id;
         const { roomId, reservationId, rating, comment } = req.body;
 
-    // Validaciones básicas
         if (!roomId || !reservationId || rating === undefined) {
             return res.status(400).json({ error: 'Faltan datos obligatorios (roomId, reservationId, rating)' });
         }
@@ -72,11 +73,9 @@ async function addReview(req, res) {
             return res.status(400).json({ error: 'rating debe ser un número entre 1 y 5' });
         }
 
-    // Verificar que existe la habitación
         const room = await Room.findById(roomId);
         if (!room) return res.status(404).json({ error: 'Habitación no encontrada' });
 
-    // Verificar reserva válida: la reserva debe pertenecer a ese user y room
         const reservation = await Reservation.findOne({
             _id: reservationId,
             userId: userId,
@@ -88,7 +87,6 @@ async function addReview(req, res) {
             return res.status(400).json({ error: 'Reserva no válida para ese usuario y habitación' });
         }
 
-    // Validación de solo si ya esta de checkout
         const now = new Date();
         const ended = ['checkOut', 'facturada'].includes(reservation.status) || (reservation.checkOut && new Date(reservation.checkOut) < now);
 
@@ -96,7 +94,6 @@ async function addReview(req, res) {
             return res.status(400).json({ error: 'No se puede valorar hasta finalizar la estancia (checkout)' });
         }
 
-    // 1 Review por reserva
         const exists = await Review.findOne({ reservationId });
         if (exists) {
             return res.status(409).json({ error: 'Ya existe una review para esta reserva' });
@@ -163,7 +160,6 @@ async function updateReview(req, res) {
     const updated = await Review.findByIdAndUpdate(id, updates, { returnDocument: 'after', runValidators: true });
     if (!updated) return res.status(404).json({ error: 'Review no encontrada' });
 
-    //Recalculamos el rate promedio del Room si cambió rating
     if (updates.rating !== undefined) {
         const stats = await Review.aggregate([
             { $match: { roomId: updated.roomId } },
@@ -212,7 +208,6 @@ async function deleteReview(req, res) {
         const deleted = await Review.findByIdAndDelete(id);
         if (!deleted) return res.status(404).json({ error: 'Review no encontrada' });
 
-    // (Opcional) recalcular rate promedio del Room
         const stats = await Review.aggregate([
             { $match: { roomId: deleted.roomId } },
             { $group: { _id: '$roomId', avg: { $avg: '$rating' } } }
