@@ -354,15 +354,15 @@ async function getRoomCalendar(req, res) {
         const monthData = parseMonth(req.query.month);
 
         if (!mongoose.isValidObjectId(id)) {
-            return res.status(400).json({ error: 'ID de habitaciÃ³n no vÃ¡lido' });
+            return res.status(400).json({ error: 'ID de habitación no válido' });
         }
 
         if (!monthData) {
-            return res.status(400).json({ error: 'El parÃ¡metro month debe tener formato YYYY-MM' });
+            return res.status(400).json({ error: 'El parámetro month debe tener formato YYYY-MM' });
         }
 
         const room = await Room.findById(id);
-        if (!room) return res.status(404).json({ error: 'HabitaciÃ³n no encontrada' });
+        if (!room) return res.status(404).json({ error: 'Habitación no encontrada' });
 
         const reservations = await Reservation.find({
             roomIds: id,
@@ -407,7 +407,7 @@ async function getRoomCalendar(req, res) {
                     ...(availabilityBlocked
                         ? [{
                             type: 'roomAvailability',
-                            reason: room.availability === 'block' ? 'HabitaciÃ³n bloqueada' : 'HabitaciÃ³n no disponible',
+                            reason: room.availability === 'block' ? 'Habitación bloqueada' : 'Habitación no disponible',
                         }]
                         : []),
                     ...dayBlocks.map(block => ({
@@ -428,7 +428,7 @@ async function getRoomCalendar(req, res) {
             calendar,
         });
     } catch (err) {
-        return res.status(500).json({ error: 'Error al obtener calendario de habitaciÃ³n', detalle: err.message });
+        return res.status(500).json({ error: 'Error al obtener calendario de habitación', detalle: err.message });
     }
 }
 
@@ -438,7 +438,7 @@ async function createRoomBlock(req, res) {
         const { startDate, endDate, reason, motivo } = req.body;
 
         if (!mongoose.isValidObjectId(id)) {
-            return res.status(400).json({ error: 'ID de habitaciÃ³n no vÃ¡lido' });
+            return res.status(400).json({ error: 'ID de habitación no válido' });
         }
 
         const startRaw = parseDate(startDate);
@@ -457,7 +457,7 @@ async function createRoomBlock(req, res) {
         }
 
         const room = await Room.findById(id);
-        if (!room) return res.status(404).json({ error: 'HabitaciÃ³n no encontrada' });
+        if (!room) return res.status(404).json({ error: 'Habitación no encontrada' });
 
         const activeReservation = await Reservation.findOne({
             roomIds: id,
@@ -468,7 +468,7 @@ async function createRoomBlock(req, res) {
 
         if (activeReservation) {
             return res.status(409).json({
-                error: 'No se puede bloquear: la habitaciÃ³n tiene una reserva activa en esas fechas',
+                error: 'No se puede bloquear: la habitación tiene una reserva activa en esas fechas',
                 reservation: activeReservation,
             });
         }
@@ -504,7 +504,7 @@ async function createRoomBlock(req, res) {
             return res.status(400).json({ error: 'Error de validaciÃ³n', detalle: errors });
         }
 
-        return res.status(500).json({ error: 'Error al crear bloqueo de habitaciÃ³n', detalle: err.message });
+        return res.status(500).json({ error: 'Error al crear bloqueo de habitación', detalle: err.message });
     }
 }
 
@@ -513,15 +513,15 @@ async function deleteRoomBlock(req, res) {
         const { id, blockId } = req.params;
 
         if (!mongoose.isValidObjectId(id) || !mongoose.isValidObjectId(blockId)) {
-            return res.status(400).json({ error: 'ID de habitaciÃ³n o bloqueo no vÃ¡lido' });
+            return res.status(400).json({ error: 'ID de habitación o bloqueo no válido' });
         }
 
         const deleted = await RoomBlock.findOneAndDelete({ _id: blockId, roomId: id });
-        if (!deleted) return res.status(404).json({ error: 'Bloqueo no encontrado para esta habitaciÃ³n' });
+        if (!deleted) return res.status(404).json({ error: 'Bloqueo no encontrado para esta habitación' });
 
         return res.status(200).json({ message: 'Bloqueo eliminado correctamente', deleted });
     } catch (err) {
-        return res.status(500).json({ error: 'Error al eliminar bloqueo de habitaciÃ³n', detalle: err.message });
+        return res.status(500).json({ error: 'Error al eliminar bloqueo de habitación', detalle: err.message });
     }
 }
 
