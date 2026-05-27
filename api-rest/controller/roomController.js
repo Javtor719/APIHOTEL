@@ -1,21 +1,45 @@
+/*
+ * =============================================
+ * Author:  Javier Orosco Torres
+ * Create date: 14/02/2026
+ * Description:
+ *      Controlador de habitaciones.
+ *      Crea, lista, modifica y elimina habitaciones del hotel.
+ *      Calcula disponibilidad por fechas combinando reservas y bloqueos.
+ *      Gestiona calendario mensual, bloqueos manuales e imagenes.
+ *      Genera, valida, regenera y audita codigos QR de habitacion.
+ * =============================================
+ */
 const mongoose = require('mongoose');
 const Room = require('../models/rooms');
 const Reservation = require('../models/reservation');
+const RoomBlock = require('../models/roomBlock');
 const { parseDate, startOfHotelDay } = require("../controller/reservationController");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
-/**
- * Gestión de Habitaciones:
- * - Crear habitación
- * - Eliminar habitación
- * - Mostrar habitaciones disponibles para un rango de fechas
- * - Modificar habitación
- * - Listar todas las habitaciones con filtros
- * - Obtener habitación por ID
- * @Javtor719
- */
-//Crear habitación
+const QRCode = require("qrcode");
+const { createRoomQrToken, verifyRoomQrToken } = require("../services/roomQr.service");
+const RoomQrScanLog = require("../models/roomQrScanLog");
+const crypto = require("crypto");
+
+function hashQrCode(code = "") {
+    return crypto.createHash("sha256").update(String(code)).digest("hex");
+}
+
+async function saveQrScanLog(req, { code, room = null, result, message = "" }) {
+    await RoomQrScanLog.create({
+        roomId: room ? room._id : null,
+        numRoom: room ? room.numRoom : null,
+        actorId: req.user ? String(req.user.id) : null,
+        actorRole: req.user ? req.user.rol : null,
+        result,
+        message,
+        codeHash: hashQrCode(code),
+        ip: req.ip || "",
+        userAgent: req.get("user-agent") || "",
+    });
+}
 async function addRoom(req, res) {
     try {
         const {
@@ -106,7 +130,6 @@ async function addRoom(req, res) {
         return res.status(500).json({ error: 'Error al crear habitación', detalle: err.message });
     }
 }
-//Darme la siguiente habitación
 async function nextRoom(req,res){
     try{
         const numF = Number(req.params.floor);
@@ -134,7 +157,6 @@ async function nextRoom(req,res){
         return res.status(500).json({ error: 'Error al visualizar nueva habitacion', detalle: err.message });
     }
 }
-//Eliminar habitación por ID
 async function deleteRoom(req, res) {
     try {
         const { id } = req.params;
@@ -173,7 +195,6 @@ async function deleteRoom(req, res) {
     }
 }
 
-//mostrar habitaciones disponibles para un rango de fechas
 async function getAvailableRooms(req, res) {
     try {
         const { checkIn, checkOut, guests } = req.query;
@@ -197,7 +218,6 @@ async function getAvailableRooms(req, res) {
             return res.status(400).json({ error: "La fecha de entrada debe ser anterior a la de salida" });
         }
 
-        //Buscamos qué habitaciones están ocupadas en esas fechas
         const overlapping = await Reservation.find({
             status: { $ne: "cancelada" },
             checkIn: { $lt: outDate },
@@ -206,6 +226,13 @@ async function getAvailableRooms(req, res) {
 
         const occupiedIds = new Set();
         overlapping.forEach(r => (r.roomIds || []).forEach(id => occupiedIds.add(String(id))));
+
+        const overlappingBlocks = await RoomBlock.find({
+            startDate: { $lt: outDate },
+            endDate: { $gt: inDate },
+        }).select("roomId");
+
+        overlappingBlocks.forEach(block => occupiedIds.add(String(block.roomId)));
 
         const allRooms = await Room.find({ availability: "available" }).sort({ numRoom: 1 });
         const availableRooms = allRooms.filter(room => !occupiedIds.has(String(room._id)));
@@ -279,7 +306,225 @@ async function getAvailableRooms(req, res) {
     }
 }
 
-//Modificar habitación
+function formatCalendarDate(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function parseMonth(value) {
+    if (!/^\d{4}-\d{2}$/.test(String(value || ''))) return null;
+
+    const [yearText, monthText] = value.split('-');
+    const year = Number(yearText);
+    const month = Number(monthText);
+
+    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+        return null;
+    }
+
+    return {
+        start: startOfHotelDay(new Date(year, month - 1, 1)),
+        end: startOfHotelDay(new Date(year, month, 1)),
+    };
+}
+
+function eachCalendarDay(start, end) {
+    const days = [];
+    const current = new Date(start);
+
+    while (current < end) {
+        days.push(new Date(current));
+        current.setDate(current.getDate() + 1);
+    }
+
+    return days;
+}
+
+function dateRangeOverlapsDay(itemStart, itemEnd, dayStart) {
+    const dayEnd = new Date(dayStart);
+    dayEnd.setDate(dayEnd.getDate() + 1);
+    return itemStart < dayEnd && itemEnd > dayStart;
+}
+
+async function getRoomCalendar(req, res) {
+    try {
+        const { id } = req.params;
+        const monthData = parseMonth(req.query.month);
+
+        if (!mongoose.isValidObjectId(id)) {
+            return res.status(400).json({ error: 'ID de habitación no válido' });
+        }
+
+        if (!monthData) {
+            return res.status(400).json({ error: 'El parámetro month debe tener formato YYYY-MM' });
+        }
+
+        const room = await Room.findById(id);
+        if (!room) return res.status(404).json({ error: 'Habitación no encontrada' });
+
+        const reservations = await Reservation.find({
+            roomIds: id,
+            status: { $in: ['confirmada', 'checkIn', 'facturada'] },
+            checkIn: { $lt: monthData.end },
+            checkOut: { $gt: monthData.start },
+        }).select('reservationNumber checkIn checkOut status');
+
+        const blocks = await RoomBlock.find({
+            roomId: id,
+            startDate: { $lt: monthData.end },
+            endDate: { $gt: monthData.start },
+        }).sort({ startDate: 1 });
+
+        const calendar = {};
+        for (const day of eachCalendarDay(monthData.start, monthData.end)) {
+            const dayReservations = reservations.filter(reservation =>
+                dateRangeOverlapsDay(reservation.checkIn, reservation.checkOut, day)
+            );
+            const dayBlocks = blocks.filter(block =>
+                dateRangeOverlapsDay(block.startDate, block.endDate, day)
+            );
+            const availabilityBlocked = room.availability === 'block' || room.availability === 'unavailable';
+
+            let status = 'free';
+            if (availabilityBlocked || dayBlocks.length > 0) {
+                status = 'blocked';
+            } else if (dayReservations.length > 0) {
+                status = 'booked';
+            }
+
+            calendar[formatCalendarDate(day)] = {
+                status,
+                reservations: dayReservations.map(reservation => ({
+                    id: reservation._id,
+                    reservationNumber: reservation.reservationNumber,
+                    status: reservation.status,
+                    checkIn: reservation.checkIn,
+                    checkOut: reservation.checkOut,
+                })),
+                blocks: [
+                    ...(availabilityBlocked
+                        ? [{
+                            type: 'roomAvailability',
+                            reason: room.availability === 'block' ? 'Habitación bloqueada' : 'Habitación no disponible',
+                        }]
+                        : []),
+                    ...dayBlocks.map(block => ({
+                        id: block._id,
+                        reason: block.reason,
+                        startDate: block.startDate,
+                        endDate: block.endDate,
+                    })),
+                ],
+            };
+        }
+
+        return res.status(200).json({
+            roomId: room._id,
+            numRoom: room.numRoom,
+            month: req.query.month,
+            availability: room.availability,
+            calendar,
+        });
+    } catch (err) {
+        return res.status(500).json({ error: 'Error al obtener calendario de habitación', detalle: err.message });
+    }
+}
+
+async function createRoomBlock(req, res) {
+    try {
+        const { id } = req.params;
+        const { startDate, endDate, reason, motivo } = req.body;
+
+        if (!mongoose.isValidObjectId(id)) {
+            return res.status(400).json({ error: 'ID de habitación no válido' });
+        }
+
+        const startRaw = parseDate(startDate);
+        const endRaw = parseDate(endDate);
+        const blockReason = reason || motivo;
+
+        if (!startRaw || !endRaw || !blockReason) {
+            return res.status(400).json({ error: 'Faltan datos obligatorios: startDate, endDate y reason/motivo' });
+        }
+
+        const blockStart = startOfHotelDay(startRaw);
+        const blockEnd = startOfHotelDay(endRaw);
+
+        if (blockStart >= blockEnd) {
+            return res.status(400).json({ error: 'La fecha de inicio debe ser anterior a la fecha final' });
+        }
+
+        const room = await Room.findById(id);
+        if (!room) return res.status(404).json({ error: 'Habitación no encontrada' });
+
+        const activeReservation = await Reservation.findOne({
+            roomIds: id,
+            status: { $in: ['confirmada', 'checkIn', 'facturada'] },
+            checkIn: { $lt: blockEnd },
+            checkOut: { $gt: blockStart },
+        }).select('reservationNumber checkIn checkOut status');
+
+        if (activeReservation) {
+            return res.status(409).json({
+                error: 'No se puede bloquear: la habitación tiene una reserva activa en esas fechas',
+                reservation: activeReservation,
+            });
+        }
+
+        const existingBlock = await RoomBlock.findOne({
+            roomId: id,
+            startDate: { $lt: blockEnd },
+            endDate: { $gt: blockStart },
+        });
+
+        if (existingBlock) {
+            return res.status(409).json({
+                error: 'Ya existe un bloqueo manual solapado para esas fechas',
+                block: existingBlock,
+            });
+        }
+
+        const block = await RoomBlock.create({
+            roomId: id,
+            startDate: blockStart,
+            endDate: blockEnd,
+            reason: blockReason,
+            createdBy: req.user && req.user.id ? req.user.id : null,
+        });
+
+        return res.status(201).json({
+            message: 'Bloqueo creado correctamente',
+            block,
+        });
+    } catch (err) {
+        if (err.name === 'ValidationError') {
+            const errors = Object.values(err.errors).map(e => e.message);
+            return res.status(400).json({ error: 'Error de validaciÃ³n', detalle: errors });
+        }
+
+        return res.status(500).json({ error: 'Error al crear bloqueo de habitación', detalle: err.message });
+    }
+}
+
+async function deleteRoomBlock(req, res) {
+    try {
+        const { id, blockId } = req.params;
+
+        if (!mongoose.isValidObjectId(id) || !mongoose.isValidObjectId(blockId)) {
+            return res.status(400).json({ error: 'ID de habitación o bloqueo no válido' });
+        }
+
+        const deleted = await RoomBlock.findOneAndDelete({ _id: blockId, roomId: id });
+        if (!deleted) return res.status(404).json({ error: 'Bloqueo no encontrado para esta habitación' });
+
+        return res.status(200).json({ message: 'Bloqueo eliminado correctamente', deleted });
+    } catch (err) {
+        return res.status(500).json({ error: 'Error al eliminar bloqueo de habitación', detalle: err.message });
+    }
+}
+
 async function updateRoom(req, res) {
     try {
         const { id } = req.params;
@@ -331,7 +576,7 @@ async function updateRoom(req, res) {
         if (allowUpdates.maxOccupancy !== undefined) allowUpdates.maxOccupancy = Number(allowUpdates.maxOccupancy);
 
         const updated = await Room.findByIdAndUpdate(id, allowUpdates, {
-            new: true,
+            returnDocument: 'after',
             runValidators: true 
         });
 
@@ -351,7 +596,6 @@ async function updateRoom(req, res) {
         return res.status(500).json({ error: 'Error al actualizar habitación', detalle: err.message });
     }
 }
-//Obtener todas las habitaciones aplicando filtros en el query
 async function getAllRooms(req, res) {
     try {
         const { roomType, availability, minPrice, maxPrice } = req.query;
@@ -376,7 +620,6 @@ async function getAllRooms(req, res) {
 
 
 
-// Obtener una habitación por id
 async function getRoomById(req, res) {
     try {
         const { id } = req.params;
@@ -391,6 +634,139 @@ async function getRoomById(req, res) {
         return res.status(200).json(room);
     } catch (err) {
         return res.status(500).json({ error: 'Error al obtener habitación', detalle: err.message });
+    }
+}
+
+async function getRoomQr(req, res) {
+    try {
+        const { id } = req.params;
+
+        if (!mongoose.isValidObjectId(id)) {
+            return res.status(400).json({ error: "ID de habitacion no valido" });
+        }
+
+        const room = await Room.findById(id);
+        if (!room) return res.status(404).json({ error: "Habitacion no encontrada" });
+
+        const code = await createRoomQrToken(room);
+        const baseUrl = process.env.QR_ROOM_BASE_URL || `${req.protocol}://${req.get("host")}/rooms/scan`;
+        const qrUrl = `${baseUrl}/${encodeURIComponent(code)}`;
+        const png = await QRCode.toBuffer(qrUrl, {
+            type: "png",
+            errorCorrectionLevel: "M",
+            margin: 2,
+            width: 320,
+        });
+
+        res.setHeader("Content-Type", "image/png");
+        res.setHeader("Content-Disposition", `inline; filename="room-${room.numRoom}-qr.png"`);
+        res.setHeader("Cache-Control", "no-store");
+        return res.status(200).send(png);
+    } catch (err) {
+        console.error("Error generando QR de habitacion:", err);
+        return res.status(500).json({ error: "Error generando QR de habitacion" });
+    }
+}
+
+async function scanRoomQr(req, res) {
+    const { code } = req.params;
+
+    try {
+        const payload = await verifyRoomQrToken(code);
+
+        const room = await Room.findById(payload.roomId);
+        if (!room) {
+            await saveQrScanLog(req, {
+                code,
+                result: "room_not_found",
+                message: "La habitacion del QR no existe"
+            });
+            return res.status(404).json({ error: "Habitacion no encontrada" });
+        }
+
+        if (Number(payload.qrVersion) !== Number(room.qrVersion || 1)) {
+            await saveQrScanLog(req, {
+                code,
+                room,
+                result: "revoked",
+                message: "El QR fue regenerado y este codigo ya no es valido"
+            });
+            return res.status(410).json({ error: "QR invalidado. Genera o escanea el QR nuevo." });
+        }
+
+        await saveQrScanLog(req, {
+            code,
+            room,
+            result: "success",
+            message: "QR escaneado correctamente"
+        });
+
+        return res.status(200).json({
+            code,
+            room,
+        });
+    } catch (err) {
+        await saveQrScanLog(req, {
+            code,
+            result: "invalid",
+            message: "QR invalido o manipulado"
+        });
+        return res.status(400).json({ error: "QR invalido o manipulado" });
+    }
+}
+
+async function regenerateRoomQr(req, res) {
+    try {
+        const { id } = req.params;
+
+        if (!mongoose.isValidObjectId(id)) {
+            return res.status(400).json({ error: "ID de habitacion no valido" });
+        }
+
+        const room = await Room.findByIdAndUpdate(
+            id,
+            { $inc: { qrVersion: 1 } },
+            { returnDocument: 'after' }
+        );
+
+        if (!room) return res.status(404).json({ error: "Habitacion no encontrada" });
+
+        const code = await createRoomQrToken(room);
+        const baseUrl = process.env.QR_ROOM_BASE_URL || `${req.protocol}://${req.get("host")}/rooms/scan`;
+        const qrUrl = `${baseUrl}/${encodeURIComponent(code)}`;
+
+        return res.status(200).json({
+            message: "QR regenerado correctamente. Los QR anteriores quedan invalidados.",
+            roomId: room._id,
+            numRoom: room.numRoom,
+            qrVersion: room.qrVersion,
+            code,
+            qrUrl,
+            qrImageUrl: `${req.protocol}://${req.get("host")}/rooms/${room._id}/qr`
+        });
+    } catch (err) {
+        console.error("Error regenerando QR de habitacion:", err);
+        return res.status(500).json({ error: "Error regenerando QR de habitacion" });
+    }
+}
+
+async function getRoomQrScanLogs(req, res) {
+    try {
+        const { id } = req.params;
+
+        if (!mongoose.isValidObjectId(id)) {
+            return res.status(400).json({ error: "ID de habitacion no valido" });
+        }
+
+        const limit = Math.min(Number(req.query.limit) || 100, 500);
+        const logs = await RoomQrScanLog.find({ roomId: id })
+            .sort({ scannedAt: -1 })
+            .limit(limit);
+
+        return res.status(200).json(logs);
+    } catch (err) {
+        console.error("Error obteniendo logs de QR:", err);
+        return res.status(500).json({ error: "Error obteniendo logs de QR" });
     }
 }
 const storage = multer.diskStorage({
@@ -425,7 +801,7 @@ async function uploadRoomImages(req, res) {
     const updated = await Room.findByIdAndUpdate(
         id,
         { $push: { image: { $each: paths } } },
-        { new: true }
+        { returnDocument: 'after' }
     );
 
     if (!updated) return res.status(404).json({ error: "Habitación no encontrada" });
@@ -450,12 +826,12 @@ async function deleteRoomImage(req, res) {
         const updated = await Room.findByIdAndUpdate(
             id,
             { $pull: { image: image } },
-            { new: true }
+            { returnDocument: 'after' }
         );
 
         if (!updated) return res.status(404).json({ error: "Habitación no encontrada" });
 
-        // best effort para borrar la imagen del disco, esto hará que no se para el proceso si por alguna razón no se borra la imagen del disco.
+        // Borrado no critico: si falla el fichero, la respuesta de BD sigue siendo valida.
         const diskPath = path.join(__dirname, "..", image); 
         fs.unlink(diskPath, () => {});
 
@@ -477,5 +853,12 @@ module.exports = {
     uploadMany,
     uploadRoomImages,
     deleteRoomImage,
-    getAvailableRooms
+    getAvailableRooms,
+    getRoomCalendar,
+    createRoomBlock,
+    deleteRoomBlock,
+    getRoomQr,
+    scanRoomQr,
+    regenerateRoomQr,
+    getRoomQrScanLogs,
 };

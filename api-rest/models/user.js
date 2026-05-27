@@ -1,4 +1,17 @@
-const {Schema, model, default: mongoose } = require('mongoose');
+/*
+ * =============================================
+ * Author: Miguel Ángel Águila Morillas y Javier Orosco Torres
+ * Create date: 14/02/2026
+ * Description:
+ *      Modelo Mongoose y clases de validacion para usuarios.
+ *      Define datos personales, credenciales, rol, imagen y estado VIP.
+ *      Centraliza validaciones de alta y actualizacion antes de crear
+ *      documentos o payloads de MongoDB.
+ *      Protege el campo password para que no se devuelva en consultas
+ *      salvo cuando se solicite expresamente.
+ * =============================================
+ */
+const { Schema, default: mongoose } = require('mongoose');
 
 /**
  * @typedef {Object} User
@@ -12,6 +25,7 @@ const {Schema, model, default: mongoose } = require('mongoose');
  * @property {number} phoneNumber - Numero de telefono del usuario
  * @property {Date} birthDate - Fecha de nacimiento del usuario
  * @property {string} cityName - Ciudad de vivienda fiscal
+ * @property {string} address - Direccion de vivienda fiscal
  * @property {"Hombre" | "Mujer"} gender - Genero del usuario
  * @property {string} imageRoute - Ruta de la imagen del usuario
  * @property {"Admin" | "Trabajador" | "Usuario"} rol - Rol del usuario
@@ -65,6 +79,11 @@ const userDatabaseSchema = new Schema({
         required: true,
         trim: true
     },
+    address: {
+        type: String,
+        required: true,
+        trim: true
+    },
     gender: {
         type: String,
         enum: ["Hombre", "Mujer"],
@@ -96,7 +115,7 @@ const userDatabaseModel = mongoose.model('user', userDatabaseSchema);
  * Clase para la creación y validación de nuevos usuarios
  */
 class UserEntryData {
-    constructor(firstName, lastName, email, password, dni, phoneNumber, birthDate, cityName, gender, imageRoute, rol, vipStatus) {
+    constructor(firstName, lastName, email, password, dni, phoneNumber, birthDate, cityName, address, gender, imageRoute, rol, vipStatus) {
         this.firstName = firstName
         this.lastName = lastName
         this.email = email
@@ -105,6 +124,7 @@ class UserEntryData {
         this.phoneNumber = phoneNumber
         this.birthDate = birthDate
         this.cityName = cityName
+        this.address = address
         this.gender = gender
         this.imageRoute = imageRoute
         this.rol = rol || "Usuario"
@@ -129,6 +149,8 @@ class UserEntryData {
         if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(this.email)) throw new Error("El correo tiene que tener un formato correcto.");
         if(this.password.length < 8) throw new Error("La contraseña tiene que contener al menos de 8 caracteres.");
         if(this.birthDate.getTime() > Date.now() - 504921600000) throw new Error("Tienes que ser mayor de 16 años.");
+        if(!this.cityName) throw new Error("La ciudad no puede estar vacía.");
+        if(!this.address) throw new Error("La dirección no puede estar vacía.");
         if(!["Hombre", "Mujer"].includes(this.gender)) throw new Error("Seleccione un Genero");
         if(!/^\d{8}[a-zA-Z]$/.test(this.dni)) throw new Error("DNI Incorrecto.");
         
@@ -154,6 +176,7 @@ class UserEntryData {
             phoneNumber: this.phoneNumber,
             birthDate: this.birthDate,
             cityName: this.cityName,
+            address: this.address,
             gender: this.gender,
             imageRoute: this.imageRoute,
             rol: this.rol,
@@ -163,7 +186,7 @@ class UserEntryData {
 }
 
 class UserUpdateData {
-    constructor(firstName, lastName, email, dni, phoneNumber, birthDate, cityName, gender, imageRoute) {
+    constructor(firstName, lastName, email, dni, phoneNumber, birthDate, cityName, address, gender, imageRoute) {
         this.firstName = firstName;
         this.lastName = lastName;
         this.email = email;
@@ -171,6 +194,7 @@ class UserUpdateData {
         this.phoneNumber = phoneNumber;
         this.birthDate = birthDate;
         this.cityName = cityName;
+        this.address = address;
         this.gender = gender;
         this.imageRoute = imageRoute;
     
@@ -184,6 +208,8 @@ class UserUpdateData {
 
         if (!(this.birthDate instanceof Date) || Number.isNaN(this.birthDate.getTime())) throw new Error("Fecha de nacimiento inválida.");
         if (this.birthDate.getTime() > Date.now() - 504921600000) throw new Error("Tienes que ser mayor de 16 años.");
+        if (!this.cityName) throw new Error("La ciudad no puede estar vacía.");
+        if (!this.address) throw new Error("La dirección no puede estar vacía.");
         if (!["Hombre", "Mujer"].includes(this.gender)) throw new Error("Seleccione un Genero");
         if (!/^\d{8}[a-zA-Z]$/.test(this.dni)) throw new Error("DNI Incorrecto.");
 
@@ -204,6 +230,7 @@ class UserUpdateData {
             phoneNumber: this.phoneNumber,
             birthDate: this.birthDate,
             cityName: this.cityName,
+            address: this.address,
             gender: this.gender,
             imageRoute: this.imageRoute,
         };
@@ -211,8 +238,8 @@ class UserUpdateData {
 }
 
 class UserAdminUpdateData extends UserUpdateData {
-    constructor(firstName, lastName, email, dni, phoneNumber, birthDate, cityName, gender, imageRoute, rol, vipStatus) {
-        super(firstName, lastName, email, dni, phoneNumber, birthDate, cityName, gender, imageRoute);
+    constructor(firstName, lastName, email, dni, phoneNumber, birthDate, cityName, address, gender, imageRoute, rol, vipStatus) {
+        super(firstName, lastName, email, dni, phoneNumber, birthDate, cityName, address, gender, imageRoute);
         this.rol = rol;
         this.vipStatus = vipStatus;
     }

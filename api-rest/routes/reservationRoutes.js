@@ -1,30 +1,36 @@
+/*
+ * =============================================
+ * Author: Miguel Ángel Águila Morillas y Javier Orosco Torres
+ * Create date: 21/05/2026
+ * Description:
+ *      Rutas de reservas y facturacion.
+ *      Permite crear, listar, consultar, cancelar y eliminar reservas.
+ *      Gestiona check-in, check-out y check-in mediante QR.
+ *      Genera facturas PDF, datos de factura, historial y envio por email.
+ *      Encadena middleware de auditoria en altas y cambios de estado.
+ * =============================================
+ */
 const express = require('express');
-const router = express.Router();
 const reservationController = require('../controller/reservationController');
-const { verifyToken ,authorizeRoles } = require('../middleware/authMiddleware.js');    
+const { verifyToken, authorizeRoles } = require('../middleware/authMiddleware');
+const { addBookingAuditLog, updateBookingAuditLog } = require('../middleware/bookingAuditLogMiddleware');
 
-//Add reservation (emp, admin)
-router.post('/add', reservationController.createReservation);
+const router = express.Router();
 
-//Delete reservation (emp,admin)
-router.delete('/delete/:id', reservationController.deleteReservation);
-
-//Cancelar reserva
-router.patch ('/cancel/:id', reservationController.cancelReservation);
-
-//List reservation (emp,admin)
-router.get('/',reservationController.listReservations);
-
-// Obtener reservas de un user
+router.post('/add', verifyToken, reservationController.createReservation, addBookingAuditLog);
+router.post('/qr-checkin', verifyToken, authorizeRoles(['Usuario']), reservationController.qrCheckIn);
+router.delete('/delete/:id', verifyToken, reservationController.deleteReservation);
+router.patch('/cancel/:id', verifyToken, reservationController.cancelReservation, updateBookingAuditLog);
+router.get('/', reservationController.listReservations);
+router.get('/dashboardStats', verifyToken, authorizeRoles(['Admin', 'Trabajador']), reservationController.getDashboardStats);
 router.get('/my-reservations', verifyToken, authorizeRoles(['Usuario']), reservationController.getUserReservations);
-
-// Obtener reserva por ID
+router.get('/invoices', verifyToken, reservationController.getInvoicesByUser);
+router.get('/:id/invoice', verifyToken, reservationController.getInvoicePDF);
+router.get('/:id/invoice-data', verifyToken, reservationController.getInvoiceData);
+router.post('/:id/invoice', verifyToken, reservationController.getInvoicePDF);
+router.post('/:id/invoice-email', verifyToken, reservationController.sendInvoiceEmail);
+router.patch('/:id/checkin', verifyToken, reservationController.checkIn, updateBookingAuditLog);
+router.patch('/:id/checkout', verifyToken, reservationController.checkOut, updateBookingAuditLog);
 router.get('/:id', reservationController.getReservation);
-
-// Check-in
-router.patch('/:id/checkin', reservationController.checkIn);
-
-// Check-out
-router.patch('/:id/checkout', reservationController.checkOut);
 
 module.exports = router;
